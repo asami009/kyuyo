@@ -434,7 +434,7 @@ table.box td.num{text-align:right}
     <div class="hr"></div>
     <button class="btn del" id="btnResetMaster">単価マスタを最初の状態に戻す</button>
     <div class="muted" style="margin-top:6px;font-size:12px">
-      銘柄・セット・その他を、このアプリの初期状態（メニュー表どおりの43銘柄）に戻します。
+      銘柄・セット・その他を、このアプリの初期状態（44銘柄）に戻します。
       打った伝票・出勤時間・原価は消えません。
     </div>
   </div>
@@ -601,7 +601,23 @@ const DEFAULT_BOTTLES = [
   {cat:"焼酎ほか",   name:"赤霧島",                  price:9000},
   {cat:"焼酎ほか",   name:"富乃宝山",                price:10000},
   {cat:"焼酎ほか",   name:"吉四六",                  price:18000},
-  {cat:"焼酎ほか",   name:"魔王",                    price:30000}
+  {cat:"焼酎ほか",   name:"魔王",                    price:30000},
+  /* ★v10.6（2026-08-18）：テキカン（テキーラ観覧車）＝ショット12個のセット。
+     締め担当さんから「販売価格40,000円（税抜）／バック8,000円」と確定をもらった。
+
+     ★なぜ「その他」ではなく**ボトル**に入れたか
+       テキカンは**複数のキャストで分ける**（例：ママ2,750円／他3人1,750円ずつ）。
+       「その他」はキャスト欄が1つしかないので**1人にしかバックが付けられない**。
+       分割（金額・割合・等分）ができるのはボトルだけなので、こちらに登録した。
+
+     ★なぜ fixedCost:0 なのか（これは機密の原価ではない）
+       ショットの扱いはテキーラと同じで、**原価を引かずに売値の20%**がバック。
+       ボトルの式は (売値−原価)×20% なので、原価0で「原価を引かない」を再現している。
+       40,000 × 20% ＝ **8,000円**（担当者さんの言う額と一致）。
+       0 は仕入れ値ではないので、14章の「原価を書かない」検査の対象外にしてある。
+
+     ※ 紙の keep 列には 40,000（売値−原価）が出る。原価を引いていないためで、正常。 */
+  {cat:"焼酎ほか",   name:"テキカン",                price:40000, fixedCost:0}
 ];
 /* ---------- 実体。中身は syncMaster() が S.master から入れる ---------- */
 const SET_KINDS = [];
@@ -2865,7 +2881,7 @@ function wireMasterButtons(){
   document.getElementById("mBottleCat"). addEventListener("change",()=>renderSet());
   document.getElementById("mBottleFind").addEventListener("input", ()=>renderSet());
   document.getElementById("btnResetMaster").onclick=()=>{
-    if(!confirm("単価マスタを最初の状態（メニュー表どおりの43銘柄）に戻します。\n\n"
+    if(!confirm("単価マスタを最初の状態（44銘柄）に戻します。\n\n"
                +"打った伝票・出勤時間・入力した原価は消えません。\n"
                +"よろしいですか？")) return;
     S.master = defaultMaster(); saveMaster();
@@ -3220,20 +3236,24 @@ function KYABA_TEST(){
        いままでは「オリシャンだけは原価を持っていてよい」という検査だった。
        このファイルを**インターネットに置いて締め担当さんにURLで渡す**ことになったので、
        **1件でも原価が書かれていたら鳴る**形に変えた。 */
-    const hard = DEFAULT_BOTTLES.filter(b=>b.fixedCost!=null).map(b=>b.name);
-    eq("★原価を持っている銘柄が1件も無い", hard, []);
-    // メニュー表に載っている42銘柄 ＋ メニュー外のオリシャン ＝ 43件
-    eq("銘柄の総数（メニュー42 ＋ オリシャン）", DEFAULT_BOTTLES.length, 43);
-    eq("★43銘柄すべてが原価を持たない", DEFAULT_BOTTLES.filter(b=>b.fixedCost==null).length, 43);
+    /* ★v10.6：0円だけは別扱い。テキカンの fixedCost:0 は「原価を引かない」という印であって
+       仕入れ値ではない（機密ではない）。検査するのは **0より大きい値** に絞る。 */
+    const hard = DEFAULT_BOTTLES.filter(b=>b.fixedCost>0).map(b=>b.name);
+    eq("★仕入れ値が書かれた銘柄が1件も無い", hard, []);
+    // メニュー表42銘柄 ＋ オリシャン ＋ テキカン ＝ 44件
+    eq("銘柄の総数（メニュー42 ＋ オリシャン ＋ テキカン）", DEFAULT_BOTTLES.length, 44);
+    eq("0円以外の原価を持つ銘柄は無い", DEFAULT_BOTTLES.filter(b=>b.fixedCost>0).length, 0);
+    eq("原価0（引かない印）はテキカンだけ",
+       DEFAULT_BOTTLES.filter(b=>b.fixedCost===0).map(b=>b.name), ["テキカン"]);
     eq("初期値の「その他」に原価は無い", DEFAULT_OTHERS.every(o=>o.cost===undefined&&o.fixedCost===undefined), true);
     // 検査そのものが効いているか（わざと原価を1件入れて、ちゃんと見つけられるか）
     eq("原価が1件でも混ざったら見つけられる",
-       [{name:"テスト",fixedCost:1}].concat(DEFAULT_BOTTLES).filter(b=>b.fixedCost!=null).length>0, true);
+       [{name:"テスト",fixedCost:1}].concat(DEFAULT_BOTTLES).filter(b=>b.fixedCost>0).length>0, true);
 
     out.push("");
     out.push("── 15. ⑤設定：単価マスタの編集（v9で追加） ──");
     T(["ママ"],[]);
-    eq("初期の銘柄数は43件", BOTTLES.length, 43);
+    eq("初期の銘柄数は44件", BOTTLES.length, 44);
     eq("初期のセットは2種類", SET_KINDS.map(k=>k.name), ["40分","60分キープ"]);
     eq("キャストドリンクの初期単価", DRINK_PRICE, 1500);
     // ★2026-08-06：担当者さん「クライナー含めてショットは全てテキーラと同じように処理する」
@@ -3244,7 +3264,7 @@ function KYABA_TEST(){
 
     // 銘柄を足す → 配列・索引・伝票の選択肢に出る
     S.master.bottles.push({cat:"焼酎ほか", name:"テスト酒", price:4000}); syncMaster();
-    eq("足した銘柄が反映される", [BOTTLES.length, !!BOTTLE_BY_NAME["テスト酒"]], [44, true]);
+    eq("足した銘柄が反映される", [BOTTLES.length, !!BOTTLE_BY_NAME["テスト酒"]], [45, true]);
     eq("足した銘柄が伝票の選択肢に出る", bottleOptions("").indexOf("テスト酒")>=0, true);
     // 隠す → 選択肢から消える。ただし選択中の行と索引には残る
     BOTTLE_BY_NAME["テスト酒"].hidden = true; syncMaster();
@@ -3252,7 +3272,7 @@ function KYABA_TEST(){
     eq("隠していても、その行で選ばれていれば残る", bottleOptions("テスト酒").indexOf("テスト酒")>=0, true);
     eq("隠しても索引には残る（過去の伝票が引けるように）", !!BOTTLE_BY_NAME["テスト酒"], true);
     eq("単価マスタを初期状態に戻せる",
-       (S.master=defaultMaster(), syncMaster(), [BOTTLES.length, !!BOTTLE_BY_NAME["テスト酒"]]), [43, false]);
+       (S.master=defaultMaster(), syncMaster(), [BOTTLES.length, !!BOTTLE_BY_NAME["テスト酒"]]), [44, false]);
 
     // 使用中の判定（削除ガードの土台）
     T(["ママ"],[Object.assign(newSlip("2026-08-01"),{guests:1,kakari:"ママ",
@@ -3276,7 +3296,7 @@ function KYABA_TEST(){
     T(["ママ"],[]);
     const ms = masterSafe();
     eq("原価を含めない書き出しに原価が入らない", ms.bottles.every(b=>b.fixedCost===undefined), true);
-    eq("それでも銘柄そのものは入っている", ms.bottles.length, 43);
+    eq("それでも銘柄そのものは入っている", ms.bottles.length, 44);
     const back = migrate({casts:[],slips:[],att:{},costs:{},
       master:{drinkPrice:1500, sets:deepCopy(DEFAULT_SET_KINDS), others:deepCopy(DEFAULT_OTHERS), bottles:deepCopy(ms.bottles)}});
     /* ★v10.4：ここは期待が逆になった。
@@ -3286,9 +3306,9 @@ function KYABA_TEST(){
        受け取った側に原価が復活するほうがおかしい）。 */
     eq("★原価なしで書き出したものを取り込むと、原価は空のまま",
        back.master.bottles.find(b=>b.name==="オリシャン").fixedCost, undefined);
-    eq("銘柄そのものは全部戻ってくる", back.master.bottles.length, 43);
+    eq("銘柄そのものは全部戻ってくる", back.master.bottles.length, 44);
     eq("v8以前のデータ（master が無い）でも初期値が入る",
-       migrate({casts:[],slips:[],att:{},costs:{}}).master.bottles.length, 43);
+       migrate({casts:[],slips:[],att:{},costs:{}}).master.bottles.length, 44);
 
     // ★D欄は「実バック額 ÷ 300円」で出す。バックが600円以外でも必ず一致する
     T(["Bさん"],[Object.assign(newSlip("2026-07-20"),{guests:0,kakari:"",
@@ -3700,6 +3720,47 @@ function KYABA_TEST(){
         const R = aggregate("2026-08-01","2026-08-15");
         eq("ふだんは内部の警告が出ない",
            R.warn.some(w=>w.indexOf("内部の計算が合っていません")>=0), false);
+      }
+    }
+
+    out.push("");
+    out.push("── 25. ★テキカン（テキーラ観覧車）（v10.6：2026-08-18 締め担当さん確定） ──");
+    {
+      /* ショット12個のセット。販売価格 40,000円（税抜）・バック 8,000円。
+         「その他」ではなく**ボトル**に入れてある（複数人で分けるため → 実装メモ）。
+         原価0＝「原価を引かずに売値の20%」を再現する印であって、仕入れ値ではない。 */
+      T(["ママ","Aさん","Bさん","Cさん"],[]);
+      eq("テキカンが最初から登録されている", !!BOTTLE_BY_NAME["テキカン"], true);
+      eq("売値は40,000円（税抜）", BOTTLE_BY_NAME["テキカン"].price, 40000);
+      eq("★原価は0（引かない印）", costOf("テキカン"), 0);
+
+      // 1人につけた場合：40,000 × 20% ＝ 8,000円
+      const one = Object.assign(newSlip("2026-08-18"),{kakari:"ママ", guests:0,
+        bottles:[{name:"テキカン", price:40000, qty:1, splits:[]}]});
+      T(["ママ"],[one],{},{});
+      eq("★バックは 8,000円", aggregate("2026-08-18","2026-08-18").casts["ママ"].bottle, 8000);
+      eq("★原価を入れていなくても警告が出ない（0で確定しているため）",
+         aggregate("2026-08-18","2026-08-18").missing, []);
+
+      /* ★4人で分ける（ママ多め）。担当者さんに送った数字と1円でも違ったら鳴る。
+         　売上   ママ 13,750 ／ 他 8,750 ずつ ＝ 40,000
+         　バック ママ  2,750 ／ 他 1,750 ずつ ＝  8,000（差額ちょうど1,000円） */
+      const four = Object.assign(newSlip("2026-08-18"),{kakari:"ママ", guests:0,
+        bottles:[{name:"テキカン", price:40000, qty:1, splitMode:"amount",
+          splits:[{cast:"ママ",val:13750},{cast:"Aさん",val:8750},
+                  {cast:"Bさん",val:8750},{cast:"Cさん",val:8750}]}]});
+      T(["ママ","Aさん","Bさん","Cさん"],[four],{},{});
+      {
+        const A25 = aggregate("2026-08-18","2026-08-18").casts;
+        eq("★ママ 2,750円 ／ 他3人 1,750円ずつ",
+           [A25["ママ"].bottle, A25["Aさん"].bottle, A25["Bさん"].bottle, A25["Cさん"].bottle],
+           [2750, 1750, 1750, 1750]);
+        eq("バックの合計は 8,000円",
+           A25["ママ"].bottle+A25["Aさん"].bottle+A25["Bさん"].bottle+A25["Cさん"].bottle, 8000);
+        eq("★ママと他の子の差は 1,000円ちょうど", A25["ママ"].bottle - A25["Aさん"].bottle, 1000);
+        eq("分けても合計は売値と同じ（警告なし）", aggregate("2026-08-18","2026-08-18").warn.length, 0);
+        eq("10円単位なので日当も丸めで動かない",
+           [A25["ママ"].pay, A25["Aさん"].pay], [2750, 1750]);
       }
     }
 
