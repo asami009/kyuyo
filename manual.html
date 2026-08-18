@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>給与計算ツール 取扱説明書</title>
+<style>
+/* ============================================================
+   取扱説明書（v10.7 対応・2026-08-18）
+   ★スマホで見ながらPCで操作する前提。だから：
+     ・文字は16px以上（iOSは16px未満の入力欄で勝手に拡大される）
+     ・タップできるものは高さ44px以上
+     ・上の検索窓は貼り付いたまま（スクロールしても消えない）
+     ・開いた項目は開いたまま。検索しても勝手に閉じない
+   ============================================================ */
+:root{
+  --bg:#f6f4f1; --card:#fff; --ink:#1d1b19; --sub:#6d6764;
+  --line:#e2ddd7; --accent:#8a5a3b; --accent-bg:#f3e9e1;
+  --warn-bg:#fff6e0; --warn-line:#e8c877;
+  --ng-bg:#fdeceb; --ng-line:#e9a9a4;
+  --ok-bg:#eaf4ec; --ok-line:#a6cdb0;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#191715; --card:#232019; --ink:#f0ece7; --sub:#a9a29c;
+    --line:#3a352e; --accent:#e0a878; --accent-bg:#33291f;
+    --warn-bg:#332a12; --warn-line:#7a6428;
+    --ng-bg:#3a1f1d; --ng-line:#8a4a45;
+    --ok-bg:#1e2f22; --ok-line:#47764f;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:16px; line-height:1.75;
+  -webkit-text-size-adjust:100%;
+  padding:0 0 60px;
+}
+.wrap{max-width:760px; margin:0 auto; padding:0 14px}
+
+/* ---------- 見出し ---------- */
+header{
+  background:var(--accent-bg); border-bottom:1px solid var(--line);
+  padding:18px 0 14px;
+}
+h1{font-size:21px; margin:0 0 4px; letter-spacing:.01em}
+header .lead{font-size:14px; color:var(--sub); margin:0}
+
+/* ---------- 検索（貼り付く） ---------- */
+.searchbar{
+  position:sticky; top:0; z-index:20;
+  background:var(--bg); border-bottom:1px solid var(--line);
+  padding:10px 0 9px;
+}
+.searchbar .wrap{display:flex; gap:8px; align-items:center}
+#q{
+  flex:1 1 auto; min-width:0;
+  font-size:17px;               /* ★16px未満にしないこと（iOSが拡大する） */
+  padding:12px 14px; height:48px;
+  border:1.5px solid var(--line); border-radius:12px;
+  background:var(--card); color:var(--ink);
+  font-family:inherit;
+}
+#q:focus{outline:none; border-color:var(--accent)}
+#clear{
+  flex:0 0 auto; height:48px; min-width:48px; padding:0 14px;
+  border:1.5px solid var(--line); border-radius:12px;
+  background:var(--card); color:var(--sub);
+  font-size:16px; font-family:inherit; cursor:pointer;
+}
+#hit{font-size:13px; color:var(--sub); padding:6px 0 0}
+
+/* ---------- 分類チップ ---------- */
+.cats{display:flex; gap:7px; overflow-x:auto; padding:11px 0 3px; -webkit-overflow-scrolling:touch}
+.cats::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto; height:40px; padding:0 15px;
+  border:1.5px solid var(--line); border-radius:20px;
+  background:var(--card); color:var(--ink);
+  font-size:14px; font-family:inherit; cursor:pointer; white-space:nowrap;
+}
+.chip.on{background:var(--accent); border-color:var(--accent); color:#fff}
+
+/* ---------- 項目 ---------- */
+.item{
+  background:var(--card); border:1px solid var(--line); border-radius:13px;
+  margin:9px 0; overflow:hidden;
+}
+.item > .head{
+  display:flex; gap:10px; align-items:center;
+  width:100%; min-height:56px; padding:12px 14px;
+  background:none; border:0; text-align:left;
+  color:var(--ink); font-size:16px; font-weight:600; font-family:inherit;
+  cursor:pointer; line-height:1.5;
+}
+.item > .head .arw{
+  flex:0 0 auto; margin-left:auto; color:var(--sub); font-size:13px;
+  transition:transform .15s;
+}
+.item.open > .head .arw{transform:rotate(90deg)}
+.item > .head:active{background:var(--accent-bg)}
+.item .body{display:none; padding:2px 14px 16px; font-size:15.5px}
+.item.open .body{display:block}
+.item .cat{
+  display:inline-block; font-size:11px; font-weight:600; color:var(--accent);
+  background:var(--accent-bg); border-radius:5px; padding:1px 7px; margin-right:2px;
+}
+.item .body p{margin:9px 0}
+.item .body ul,.item .body ol{margin:9px 0; padding-left:1.35em}
+.item .body li{margin:5px 0}
+.item .body b{color:var(--ink)}
+.step{counter-reset:st; list-style:none; padding-left:0 !important}
+.step > li{
+  counter-increment:st; position:relative; padding-left:34px; margin:11px 0 !important;
+}
+.step > li::before{
+  content:counter(st); position:absolute; left:0; top:2px;
+  width:24px; height:24px; border-radius:50%;
+  background:var(--accent); color:#fff;
+  font-size:13px; font-weight:700; text-align:center; line-height:24px;
+}
+.note{border-radius:10px; padding:11px 13px; margin:11px 0; font-size:14.5px; line-height:1.7}
+.note.warn{background:var(--warn-bg); border:1px solid var(--warn-line)}
+.note.ng  {background:var(--ng-bg);   border:1px solid var(--ng-line)}
+.note.ok  {background:var(--ok-bg);   border:1px solid var(--ok-line)}
+kbd{
+  background:var(--accent-bg); border:1px solid var(--line); border-radius:5px;
+  padding:1px 6px; font-size:13.5px; font-family:inherit; white-space:nowrap;
+}
+.empty{padding:30px 4px; color:var(--sub); text-align:center; font-size:15px}
+footer{margin-top:26px; padding-top:14px; border-top:1px solid var(--line); color:var(--sub); font-size:13px}
+mark{background:#ffe9a8; color:#1d1b19; border-radius:3px; padding:0 1px}
+@media (prefers-color-scheme: dark){ mark{background:#7a6428; color:#fff} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>給与計算ツール　取扱説明書</h1>
+    <p class="lead">知りたいことを検索窓に打つと、その項目だけ出ます。<br>
+      例）<b>締め</b>／<b>原価</b>／<b>ボーナス</b>／<b>明細</b>／<b>間違えた</b></p>
+  </div>
+</header>
+
+<div class="searchbar">
+  <div class="wrap">
+    <input id="q" type="search" placeholder="検索（例：締め、原価、間違えた）"
+           autocomplete="off" autocorrect="off" spellcheck="false">
+    <button id="clear" type="button">✕</button>
+  </div>
+  <div class="wrap"><div id="hit"></div></div>
+</div>
+
+<div class="wrap">
+  <div class="cats" id="cats"></div>
+  <div id="list"></div>
+  <footer>
+    給与計算ツール v10.7 対応　最終更新 2026-08-18<br>
+    書いてないこと・分からないことが出たら、そのまま聞いてください。ここに足します。
+  </footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   項目データ。cat＝分類、t＝見出し、k＝検索用の別の言い方、h＝本文
+   ★k（別の言い方）が検索の当たり具合を決める。
+     見出しに無い言葉でも探せるように、現場で使いそうな言い方を入れてある。
+   ============================================================ */
+const ITEMS = [
+
+/* ---------------- はじめに ---------------- */
+{cat:"はじめに", t:"これは何をする道具？", k:"概要 なにができる 全体 ざっくり はじめて 初めて",
+ h:`<p>伝票と出勤時間を打つと、<b>キャストさんの給料を計算して、給与明細と出勤表を出す</b>道具です。</p>
+ <ul>
+   <li>紙の伝票1枚＝この道具の伝票1件</li>
+   <li>締めは<b>月2回</b>。前期（1〜15日）と後期（16〜末日）</li>
+   <li>紙でやっていた計算をそのまま置き換えたものなので、<b>金額の出し方は紙と同じ</b>です</li>
+ </ul>
+ <div class="note ok"><b>安心してください。</b>打った内容は<b>この端末のブラウザの中</b>に保存されます。
+ どこかに送られることはありません。間違えても、ほとんどのことはやり直せます。</div>`},
+
+{cat:"はじめに", t:"タブは6つ。どれを使う？", k:"タブ 画面 メニュー どこ ①②③④⑤⑥ 番号",
+ h:`<ul>
+   <li><b>① 伝票入力</b>　… 伝票を打つ。<b>毎日ここ</b></li>
+   <li><b>② 出勤時間</b>　… 出勤・退勤の時刻を入れる。<b>毎日ここ</b></li>
+   <li><b>③ ボトル原価</b>　… 出たボトルの仕入れ値を入れる（この担当は別の人でもOK）</li>
+   <li><b>④ 締め・給与</b>　… 金額を見る。締める。給与明細を出す</li>
+   <li><b>⑤ 設定</b>　… キャスト登録・単価・ボーナス・丸め</li>
+   <li><b>⑥ 検算</b>　… 計算が仕様どおりか、この道具が自分で検査する（ふだんは触らなくてOK）</li>
+ </ul>
+ <p>毎日やるのは<b>①と②だけ</b>です。</p>`},
+
+{cat:"はじめに", t:"データはどこに保存される？消えない？", k:"保存 データ 消える バックアップ 移す 端末 別のパソコン 引っ越し",
+ h:`<p>打った内容は<b>いま使っているブラウザの中</b>に保存されます。閉じても残ります。</p>
+ <div class="note warn"><b>消えることがある場面：</b>
+ <ul><li>ブラウザの「履歴とデータを消去」をした</li>
+ <li>シークレットウィンドウ（プライベートモード）で使った</li>
+ <li>別のパソコン・別のブラウザで開いた（そこには何も無い状態から始まります）</li></ul></div>
+ <p><b>控えの取り方：</b>⑤設定の一番下「データの書き出し・取り込み」で
+ <kbd>書き出す（自分の別の端末に移す用）</kbd>を押すと、文字の塊が出ます。
+ それをメモに貼って保存してください。戻すときは同じ場所の
+ <kbd>取り込む</kbd>に貼り付けます。</p>
+ <p>月に1回、締めたあとに控えを取っておくと安心です。</p>`},
+
+/* ---------------- 毎日やること ---------------- */
+{cat:"毎日やること", t:"伝票を打つ（①伝票入力）", k:"入力 打つ 伝票 新しい 追加 セット ドリンク ボトル 会計 客 人数 係",
+ h:`<ol class="step">
+   <li>上の<b>「表示する日</b>」をその日の日付にする</li>
+   <li><kbd>＋ 新しい伝票</kbd>を押す</li>
+   <li><b>伝票No.・人数・係のキャスト・現金かカード</b>を入れる</li>
+   <li>下のブロックで<kbd>＋ 行を追加</kbd>を押して、伝票に書いてあるものを入れる<br>
+       （セット／キャストドリンク／その他（テキーラ・ソフトドリンクなど）／ボトル／調整）</li>
+ </ol>
+ <div class="note ok">打つたびに<b>その場で自動保存</b>されます。「保存」ボタンはありません。</div>
+ <div class="note warn"><b>係を空にすると、誘客も売上も誰にも付きません。</b>
+ フリーのお客様のときはそれで正しいです。付けたいときは必ず係を選んでください。</div>`},
+
+{cat:"毎日やること", t:"出勤時間を入れる（②出勤時間）", k:"出勤 退勤 時間 時刻 勤務 時給 深夜 翌日 またぐ 26時 名前が出ない",
+ h:`<p>日付を選ぶと、<b>その日の伝票に名前が出てきた人が自動で並びます。</b>
+ 出勤・退勤を打つだけです。</p>
+ <ul>
+   <li>書き方は <b>20:00</b> / <b>1:30</b>。「2000」「130」でも同じに直ります</li>
+   <li>深夜の退勤は <b>1:00</b>とそのまま書けば翌日として計算します（<b>26:00</b>という書き方もできます）</li>
+   <li>時給は<b>30分単位で切り捨て</b>。5時間20分なら5時間ぶんです</li>
+ </ul>
+ <div class="note warn"><b>伝票に名前が出ない人</b>（誘客もドリンクも無かった人）は自動で並びません。
+ 「ここにいない人を追加」から選んで足してください。<br>
+ ★ここを忘れると<b>その人の時給がまるごと0円</b>になります。締めるときに検査で止まります。</div>`},
+
+{cat:"毎日やること", t:"ボトル原価を入れる（③ボトル原価）", k:"原価 仕入れ 仕入値 ボトル バック 焼き付け 期間 未入力",
+ h:`<p>出たボトルの<b>仕入れ値</b>を入れる場所です。ボトルのバックは
+ <b>（売値 − 原価）× 20%</b> なので、原価が入っていないとバックが0円になります。</p>
+ <ol class="step">
+   <li>上の<b>期間</b>を、原価を確定させたい期間にする（例：8/1〜8/15）</li>
+   <li>その期間の伝票に出た銘柄だけが並ぶので、仕入れ値を入れる</li>
+ </ol>
+ <div class="note warn"><b>★期間を先に選ぶのが大事。</b>
+ お店は同じ銘柄でも<b>都度仕入れる</b>ので値段が変わります。
+ 期間を選んで入れると<b>その期間のボトルにだけ焼き付く</b>ので、
+ 次の月に別の値段を入れても前の月の給料は動きません。</div>
+ <p>打ち間違えたときは、<b>同じ期間を出して入れ直せば</b>直ります（欄を空にすると未入力に戻ります）。</p>`},
+
+/* ---------------- 締め ---------------- */
+{cat:"締め", t:"締めるとどうなる？（一番大事）", k:"締め 締める ロック 固定 動かない 確定 lock 変わる",
+ h:`<p>締めると、<b>その期間の金額がそこで固定されます。</b>
+ あとから原価・丸め・ボーナスを直しても、<b>締めた期間の給料は1円も動きません。</b></p>
+ <div class="note ok"><b>なぜこれが必要か：</b>
+ 原価を入れる人と締める人が別です。締めて振り込んだあとに誰かが原価を入れると、
+ <b>渡した金額と画面の金額が違う</b>ことになってしまいます。締めるとそれが起きません。</div>
+ <p>締めると、あわせて次のようになります。</p>
+ <ul>
+   <li>その期間の<b>伝票が編集できなくなる</b>（見るのはできます。一覧に🔒が出ます）</li>
+   <li>その期間の日付で<b>新しい伝票を作れなくなる</b></li>
+   <li>その期間の<b>出勤時間が触れなくなる</b></li>
+   <li>③原価・⑤設定は触れます。ただし<b>締めた期間には効きません</b>（画面にもそう出ます）</li>
+ </ul>
+ <p>あとから<b>解除できます</b>（「締めを解除して直す」の項目を見てください）。</p>`},
+
+{cat:"締め", t:"締めるやり方（手順）", k:"締め方 手順 やり方 前期 後期 締める 押す ボタン",
+ h:`<ol class="step">
+   <li><b>④締め・給与</b>タブを開く</li>
+   <li>上の<b>「締め（年月）」</b>と<b>「前期／後期」</b>を選ぶ</li>
+   <li><kbd>この締めで出す</kbd>を押す</li>
+   <li>一番上に出る<kbd>🔒 この期間を締める</kbd>を押す</li>
+   <li>検査が走ります。<b>引っかかったら理由が赤で出る</b>ので、直してからもう一度押す</li>
+   <li>金額と人数の確認が出るので、合っていたら<b>OK</b></li>
+ </ol>
+ <div class="note warn"><b>締められるのは前期・後期まるごとだけです。</b>
+ 「1日〜10日」のような半端な期間では締めるボタンが出ません。
+ かならず<kbd>この締めで出す</kbd>を使って期間を出してください。</div>`},
+
+{cat:"締め", t:"「まだ締められません」と出た", k:"締められない 赤 エラー 止まる 検査 引っかかる できない",
+ h:`<p>締める前に検査をしています。<b>あとから直すと渡した額と合わなくなるもの</b>が
+ 残っていると止まります。出た理由ごとに直してください。</p>
+ <ul>
+   <li><b>原価が未入力のボトルがあります</b><br>
+       → ③ボトル原価タブで入れる。<b>そのボトルのバックが0円で計算されています</b></li>
+   <li><b>出勤・退勤の時刻が空の人があります</b><br>
+       → ②出勤時間タブで入れる。<b>その人の時給分が0円になっています</b></li>
+   <li><b>確認したいところが残っています</b><br>
+       → ④タブの「確認したいところ」に出ている内容を直す（分割の合計が売値と合わない等）</li>
+   <li><b>ボーナスの段（ラダー）が入っていません</b><br>
+       → ⑤設定で段を入れる。ボーナスを使わないなら「もらう人」を空にする</li>
+   <li><b>この期間は前期・後期ぴったりではありません</b><br>
+       → 上の「締め（年月）」「前期／後期」を選んで<kbd>この締めで出す</kbd>を押す</li>
+   <li><b>この期間には伝票が1枚もありません</b><br>
+       → 期間の選び間違いです。年月と前期／後期を確認してください</li>
+ </ul>
+ <div class="note ok">この検査は<b>邪魔をしているのではなく、間違った金額で締めるのを止めています。</b>
+ 全部直してから締めれば、その金額はもう動きません。</div>`},
+
+{cat:"締め", t:"締めを解除して直す", k:"解除 やり直し 直したい 戻す 間違えて締めた 打ち間違い ロック解除",
+ h:`<p>締めたあとに間違いが見つかったら、解除して直せます。</p>
+ <ol class="step">
+   <li><b>④締め・給与</b>タブで、その期間を出す（年月＋前期／後期 →<kbd>この締めで出す</kbd>）</li>
+   <li><kbd>🔓 締めを解除</kbd>を押す</li>
+   <li>期間名と締めたときの合計が出るので、合っていたら<b>OK</b></li>
+   <li>伝票・出勤時間が触れるようになるので直す</li>
+   <li>直したら<b>もう一度締める</b></li>
+ </ol>
+ <div class="note ok"><b>締めたときの金額は控えとして残ります。</b>
+ 締め直すと「前に締めたとき ◯◯円 → 今回 ◯◯円（差 ±◯◯円）」と画面に出るので、
+ <b>いくら変わったかが分かります</b>。振込の差額を出すときに使ってください。</div>
+ <div class="note warn">解除している間は、その期間の金額が<b>いまの設定で計算し直されます</b>。
+ 直し終わったら必ず締め直してください。</div>`},
+
+{cat:"締め", t:"「控えと計算が合っていません」と赤で出た", k:"合っていません 赤 ズレ 不具合 バグ 違う 控え",
+ h:`<div class="note ng"><b>これはこの道具の不具合です。あなたの操作ミスではありません。</b><br>
+ <b>締めた額（画面の上に出ている合計）が正しいので、そのまま払ってください。</b></div>
+ <p>そのあと、この画面を写真に撮って作った人に送ってください。
+ 何を触ったあとに出たかも一緒に伝えてもらえると早く直せます。</p>`},
+
+/* ---------------- 給与明細・出勤表 ---------------- */
+{cat:"出す・印刷", t:"給与明細を出す・印刷する", k:"明細 給与明細 印刷 PDF 出す 発行 渡す 紙",
+ h:`<ol class="step">
+   <li><b>④締め・給与</b>タブで期間を出す</li>
+   <li>その人のカードの<kbd>📄 給与明細を発行</kbd>を押す</li>
+   <li><kbd>🖨 印刷</kbd>を押す</li>
+ </ol>
+ <p>PDFで保存したいときは、印刷の画面で<b>送信先を「PDFに保存」</b>にしてください。
+ ファイル名は<b>「7月前期_ママ」</b>のような形になります。</p>
+ <div class="note ok">出勤表（横長の紙の様式）も同じところから出ます。
+ <b>印刷は自動で横向き</b>になります。</div>`},
+
+{cat:"出す・印刷", t:"金額の内訳を見る", k:"内訳 なんでこの金額 計算 確認 表 合計 バック 時給",
+ h:`<p>④締め・給与タブの<b>「内訳」</b>の表に、1人ずつ全部出ています。</p>
+ <ul>
+   <li><b>勤務(実)</b>／<b>30分切捨</b>／<b>時給分</b></li>
+   <li><b>誘客</b>（人数×500円）／<b>キャスドリ</b>／<b>テキーラ</b>／<b>同伴</b>／<b>ボトル</b></li>
+   <li><b>バック計</b>（上の5つの合計）</li>
+   <li><b>ボーナス</b>（段が入っているときだけ列が出ます）</li>
+   <li><b>給料</b>（時給分＋バック計＋ボーナス を日ごとに丸めたもの）</li>
+ </ul>`},
+
+/* ---------------- 設定 ---------------- */
+{cat:"設定", t:"キャストを登録する・名前を直す", k:"キャスト 登録 追加 名前 変更 改名 削除 やめた 新しい子",
+ h:`<p><b>⑤設定</b>タブの「キャスト登録」から。名前は<b>伝票に書かれる呼び名のまま</b>入れてください。</p>
+ <ul>
+   <li><kbd>名前を直す</kbd>を押すと、<b>過去の伝票の名前も一緒に直ります</b>（給料が消えません）</li>
+   <li><kbd>↑</kbd>で並び順を変えられます（伝票の選択肢の順番になります）</li>
+   <li>削除は、その人の記録が残っているときは確認が出ます</li>
+ </ul>
+ <div class="note ok">②出勤時間タブの「＋ 新しい人を登録」からも足せます。
+ そちらで足した人も、ここのキャスト一覧に入ります。</div>`},
+
+{cat:"設定", t:"ママの売上ボーナスを設定する", k:"ボーナス ラダー 段 総売上 ママ 300万 達成 積み上がる",
+ h:`<p>お店の<b>その月の総売上</b>が段（ラダー）に届いた日に、<b>その日の日当</b>にボーナスが乗ります。</p>
+ <ol class="step">
+   <li><b>⑤設定</b>タブの「👑 ママの売上ボーナス」で<b>もらう人</b>を選ぶ</li>
+   <li><kbd>＋ 段を追加</kbd>で「総売上◯◯円 → ◯◯円」を入れる</li>
+ </ol>
+ <ul>
+   <li><b>積み上がります。</b>300万・400万・500万と入れておけば、520万売れた月は<b>3つ全部</b>つきます</li>
+   <li><b>ママが休んでいる日に達成しても、その日に付きます</b>（お店の売上に対するものなので）</li>
+   <li>月が変わったら、また1日から数え直します</li>
+ </ul>
+ <div class="note warn"><b>段が空のあいだ、ボーナスは1円も付きません。</b>
+ 数字がまだ決まっていないので、わざと空で出荷しています。
+ 仮の数字を入れると、それを本物だと思って締めてしまうためです。<br>
+ 数字が決まったらここに入れてください。<b>入れた段は、締めていない期間には遡って効きます。</b></div>`},
+
+{cat:"設定", t:"日当の端数（丸め）を変える", k:"丸め 端数 はした 10円 切り捨て 切り上げ 四捨五入 単位",
+ h:`<p>いまは<b>10円単位・切り捨て・その日の日当ごと</b>になっています（お店の実際の払い方に合わせたもの）。</p>
+ <p>変えるときは<b>⑤設定</b>タブの「日当の丸め」から。単位と丸め方の両方を変えられます。
+ 単位に<b>0か1</b>を入れると丸めません（1円単位のまま）。</p>
+ <div class="note warn"><b>★「その日ごと」に丸めています。期間の合計をまとめて丸めているのではありません。</b><br>
+ 例）3,499円の日が2日 → <b>3,490＋3,490＝6,980円</b>（合計を丸めた6,990円ではありません）。<br>
+ お店が日ごとに丸めて払っているので、こちらが正しいです。</div>
+ <div class="note ng"><b>ここを変えると、締めていない期間の給料が全部変わります。</b>
+ 変えるときは、締めていない期間の金額を確認してからにしてください。
+ 締め済みの期間は動きません。</div>`},
+
+{cat:"設定", t:"単価・銘柄を直す（セット・ドリンク・ボトル）", k:"単価 値段 売値 銘柄 追加 セット テキーラ 炭酸 バック マスタ リセット",
+ h:`<p><b>⑤設定</b>タブから直せます。「キャストドリンク・セット」「その他」「ボトル銘柄」の3か所です。</p>
+ <div class="note ok"><b>直しても過去の伝票は動きません。</b>
+ 伝票を打った時点の単価とバックが<b>その伝票に控えられている</b>ので、
+ いま値段を変えても、前に打った伝票の金額と給料はそのままです。</div>
+ <ul>
+   <li>ボトル銘柄は数が多いので、上の「分類でしぼる」「名前で探す」を使ってください</li>
+   <li><b>計算レート</b>（時給1,500円・誘客500円・同伴1,500円・ボトル20%など）は固定です。
+       変える必要が出たら相談してください</li>
+ </ul>`},
+
+{cat:"設定", t:"テキカン（テキーラ観覧車）の打ち方", k:"テキカン 観覧車 テキーラ 12個 40000 8000 分割 4人 分ける",
+ h:`<p><b>ボトル</b>のブロックから<b>「テキカン」</b>を選んでください（「その他」ではありません）。
+ 売値40,000円・バック8,000円で登録してあります。</p>
+ <div class="note warn"><b>なぜボトルなのか：</b>「その他」はキャスト欄が1つしかないので、
+ <b>1人にしかバックが付きません</b>。何人かで分けられるのは<b>ボトルだけ</b>です。</div>
+ <p><b>4人で分けるとき</b>は「分割」に4人を並べて金額を入れます。例）</p>
+ <ul>
+   <li>ママ 13,750 ／ 他3人 8,750ずつ（合計40,000）</li>
+   <li>→ バックは ママ 2,750 ／ 他3人 1,750ずつ（合計8,000・差はちょうど1,000円）</li>
+ </ul>
+ <p>人数で等分したいだけなら<kbd>等分の金額を入れる</kbd>を押せば入ります。</p>
+ <div class="note ok">紙の keep 列に 40,000 と出るのは正常です（テキカンは原価を引かない扱いなので、
+ 売値がそのまま出ます）。</div>`},
+
+/* ---------------- 困ったとき ---------------- */
+{cat:"困ったとき", t:"打ち間違えた・消してしまった", k:"間違えた ミス 消えた 消してしまった 削除 元に戻す やり直し undo",
+ h:`<ul>
+   <li><b>伝票の中身を打ち間違えた</b> → その伝票を開いて直すだけ。自動保存されます</li>
+   <li><b>行を消してしまった</b> → もう一度<kbd>＋ 行を追加</kbd>して入れ直してください
+       （消す前に金額つきの確認が出るようになっています）</li>
+   <li><b>伝票をまるごと消してしまった</b> → 打ち直しになります。
+       控えを取っていれば⑤設定の<kbd>取り込む</kbd>から戻せます</li>
+   <li><b>締めた期間を直したい</b> → 「締めを解除して直す」の項目を見てください</li>
+ </ul>
+ <div class="note ok">月に1回、締めたあとに⑤設定から控えを書き出しておくと、
+ こういうときに戻せます。</div>`},
+
+{cat:"困ったとき", t:"金額がおかしい・思っていた額と違う", k:"金額 違う おかしい 少ない 多い 合わない 0円 バック付かない 計算",
+ h:`<p>よくある原因を上から順に見てください。</p>
+ <ol class="step">
+   <li><b>④タブの上に赤や黄色の枠が出ていないか。</b>原価未入力・確認したいところが出ていれば、まずそれ</li>
+   <li><b>ボトルのバックが0円</b> → ③原価タブで原価が未入力。入れてください</li>
+   <li><b>時給が0円</b> → ②出勤時間で出勤・退勤が空。伝票に名前が出ない人は自動で並びません</li>
+   <li><b>誘客が付かない</b> → 伝票の<b>係</b>が空、または「案内所」になっている（どちらも付かないのが正しい）</li>
+   <li><b>同伴が違う人に付いている</b> → 伝票の同伴の相手が空だと、<b>係の人</b>に付きます</li>
+   <li><b>1円単位が合わない</b> → 日当は10円単位で切り捨てています。「日当の端数（丸め）」の項目を見てください</li>
+   <li><b>締め済みなのに額が違う</b> → 締めた期間は動きません。<b>締め済みの表示（🔒）が出ているか</b>確認してください</li>
+ </ol>
+ <p>それでも合わないときは、<b>⑥検算</b>タブで<kbd>検算を実行</kbd>を押してください。
+ 「✅ 全部 PASS」なら計算のしかたは正しいので、原因は打ち込み側です。</p>`},
+
+{cat:"困ったとき", t:"画面が古いまま／直したのに変わらない", k:"変わらない 古い 更新 リロード 再読み込み 反映されない 直してもらった",
+ h:`<p>直してもらった直後は、ブラウザが前のものを覚えていることがあります。</p>
+ <p><b>Mac：</b><kbd>⌘ + R</kbd>　<b>Windows：</b><kbd>Ctrl + R</kbd>　を押して読み込み直してください。</p>
+ <div class="note ok">読み込み直しても<b>打ったデータは消えません。</b>安心して押してください。</div>`},
+
+{cat:"困ったとき", t:"スマホでこの説明書を見ながらPCで操作したい", k:"スマホ 携帯 見ながら 両方 スマートフォン 手元 ブックマーク",
+ h:`<p>この説明書はスマホでそのまま読めます。おすすめのやり方：</p>
+ <ol class="step">
+   <li>スマホでこのページを開く</li>
+   <li><b>ホーム画面に追加</b>（iPhoneは共有ボタン →「ホーム画面に追加」）</li>
+   <li>PCで道具を操作しながら、スマホで手順を見る</li>
+ </ol>
+ <p>検索窓に打つと該当の項目だけ出るので、探すより<b>打った方が速い</b>です。
+ 開いた項目は開いたままなので、手を動かしながら読めます。</p>`},
+
+{cat:"困ったとき", t:"englishの画面や英語のダイアログが出た", k:"英語 english わからない ダイアログ allow 許可",
+ h:`<p>この道具の中では英語は出ません。出たとしたらブラウザ側のお知らせです。</p>
+ <p>意味が分からないものは<b>押さずに画面を写真に撮って送ってください。</b>
+ 押していいものかどうか、こちらで確認します。</p>`},
+
+/* ---------------- 用語 ---------------- */
+{cat:"用語", t:"用語の意味（バック・keep・係・調整）", k:"用語 意味 言葉 バック keep 係 調整 誘客 同伴 分割 案内所",
+ h:`<ul>
+   <li><b>バック</b>　… キャストさんに入る歩合。誘客・キャスドリ・テキーラ・同伴・ボトルの合計</li>
+   <li><b>誘客</b>　… 卓の人数 × 500円。<b>係のキャスト</b>に付きます（金額ではなく人数で決まります）</li>
+   <li><b>同伴</b>　… 1,500円。相手を選ばないと<b>係の人</b>に付きます</li>
+   <li><b>係</b>　… その卓を担当したキャスト。空にすると誘客も売上も誰にも付きません</li>
+   <li><b>案内所</b>　… キャストではないので、誘客も売上も付きません（フリーと同じ扱い）</li>
+   <li><b>keep</b>　… 紙の出勤表の列名。ボトルの<b>売値−原価</b>が入ります。その20%がバック</li>
+   <li><b>調整</b>　… 値引き・ご祝儀など。マイナスも入れられます</li>
+   <li><b>分割</b>　… 1本のボトルの売上とバックを何人かで分けること。金額でも割合(%)でも入れられます</li>
+   <li><b>丸め</b>　… 日当の端数の処理。いまは10円単位で切り捨て</li>
+   <li><b>締め</b>　… その期間の金額を確定させること。月2回（前期・後期）</li>
+ </ul>`}
+];
+
+/* ============================================================
+   描画・検索
+   ★検索は「見出し＋別の言い方＋本文」を見る。
+     本文はタグを外した文字だけにする（太字タグで切れて当たらなくなるのを防ぐ）。
+   ============================================================ */
+const strip = s => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+ITEMS.forEach((it,i)=>{ it.i=i; it.hay = (it.t+" "+it.k+" "+it.cat+" "+strip(it.h)).toLowerCase(); });
+
+const CATS = [];
+ITEMS.forEach(it=>{ if(CATS.indexOf(it.cat)<0) CATS.push(it.cat); });
+
+let cat = "";            // 選んでいる分類（空＝すべて）
+let open = {};           // 開いている項目
+const esc = s => s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* 打った言葉を本文の中で光らせる。★タグの中は触らないこと（属性が壊れる） */
+function hl(html, q){
+  if(!q) return html;
+  const parts = q.split(/\s+/).filter(Boolean).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"));
+  if(!parts.length) return html;
+  const re = new RegExp("("+parts.join("|")+")", "gi");
+  return html.split(/(<[^>]+>)/).map(seg =>
+    seg.charAt(0)==="<" ? seg : seg.replace(re, "<mark>$1</mark>")).join("");
+}
+
+function renderCats(){
+  const box = document.getElementById("cats");
+  box.innerHTML = ['<button class="chip'+(cat===""?" on":"")+'" data-c="">すべて</button>']
+    .concat(CATS.map(c=>'<button class="chip'+(cat===c?" on":"")+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'))
+    .join("");
+  box.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{ cat=b.dataset.c; render(); });
+}
+
+function render(){
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  const hits = ITEMS.filter(it=>{
+    if(cat && it.cat!==cat) return false;
+    return words.every(w=>it.hay.indexOf(w)>=0);     // 打った言葉が全部入っているもの
+  });
+
+  document.getElementById("hit").textContent =
+    q ? ("「"+document.getElementById("q").value.trim()+"」… "+hits.length+"件") :
+    (cat ? cat+"　"+hits.length+"件" : ITEMS.length+"項目");
+
+  const list = document.getElementById("list");
+  if(!hits.length){
+    list.innerHTML = '<div class="empty">見つかりませんでした。<br>'
+      + '別の言い方で探してみてください（例：<b>締め</b>／<b>原価</b>／<b>間違えた</b>）。<br><br>'
+      + 'それでも出てこないことは、そのまま聞いてください。ここに足します。</div>';
+    return;
+  }
+  /* ★検索したときは中身も開く（絞り込んだのに見出しだけ並ぶと二度手間になる）。
+     1件だけのときは必ず開く。 */
+  const auto = !!q;
+  list.innerHTML = hits.map(it=>{
+    const on = auto || open[it.i];
+    return '<div class="item'+(on?" open":"")+'" data-i="'+it.i+'">'
+      + '<button class="head" type="button"><span>'+hl(esc(it.t),q)+'</span><span class="arw">▶</span></button>'
+      + '<div class="body"><span class="cat">'+esc(it.cat)+'</span>'+hl(it.h,q)+'</div></div>';
+  }).join("");
+  list.querySelectorAll(".item").forEach(el=>{
+    el.querySelector(".head").onclick = ()=>{
+      const i = +el.dataset.i;
+      const nowOpen = el.classList.toggle("open");
+      open[i] = nowOpen;
+    };
+  });
+}
+
+document.getElementById("q").addEventListener("input", render);
+document.getElementById("clear").onclick = ()=>{
+  const q = document.getElementById("q");
+  q.value = ""; cat = ""; open = {}; renderCats(); render(); q.focus();
+};
+renderCats();
+render();
+</script>
+</body>
+</html>

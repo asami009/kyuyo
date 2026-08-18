@@ -171,8 +171,14 @@ table.box td.num{text-align:right}
 <body>
 
 <header>
-  <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v10</span></h1>
+  <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v10.7</span></h1>
   <div class="sub">給料 ＝ 1,500円 × 勤務時間（30分切捨） ＋ バック　／　データは この端末のブラウザ内 のみに保存されます</div>
+  <!-- ★v10.7：取扱説明書（検索できる。スマホで見ながらPCで操作する用） -->
+  <div class="sub" style="margin-top:5px">
+    📖 <a href="manual.html" target="_blank" rel="noopener"
+          style="color:inherit;font-weight:600">取扱説明書をひらく</a>
+    <span style="opacity:.6">（分からないことは検索窓に打つと出ます。スマホでも読めます）</span>
+  </div>
 </header>
 
 <nav id="nav">
@@ -246,6 +252,7 @@ table.box td.num{text-align:right}
       <div class="date"><label>（終了）</label><input type="date" id="costTo"></div>
       <div style="flex:0 0 auto"><button class="btn" id="btnCostAll">全期間</button></div>
     </div>
+    <div id="lockNoteCost"></div>
   </div>
   <div class="card">
     <div class="msg warn">
@@ -279,6 +286,8 @@ table.box td.num{text-align:right}
       <div style="flex:0 0 auto"><button class="btn" id="btnPayAll">全期間</button></div>
     </div>
   </div>
+  <!-- ★v10.7：締めのロック（2026-08-18） -->
+  <div id="lockBox"></div>
   <div id="payWarn"></div>
   <div class="card">
     <h2>支給額 <span class="note">この期間に払う金額</span></h2>
@@ -296,6 +305,7 @@ table.box td.num{text-align:right}
 
 <!-- ============ ⑤ 設定 ============ -->
 <section id="s-set">
+  <div id="lockNoteSet"></div>
   <div class="card">
     <h2>店舗名 <span class="note">給与明細の一番上に出ます</span></h2>
     <div class="row"><div class="wide"><input id="storeName" placeholder="例：〇〇（店名）"></div></div>
@@ -925,7 +935,8 @@ const KEY = "kyaba_v8";
 let S = load();
 syncMaster();
 function blank(){ return {casts:["ママ"], slips:[], att:{}, costs:{}, store:{name:""}, ui:{},
-                          bonus:defaultBonus(), round:defaultRound(), master:defaultMaster()}; }
+                          bonus:defaultBonus(), round:defaultRound(), master:defaultMaster(),
+                          locks:{}, lockLog:[]}; }
 /* ★v10.3：ママの売上ボーナス（総売上ラダー）の設定（2026-08-16）
    ・単価マスタ（S.master）の中ではなく S の直下に置いている。
      ⑤設定の「単価マスタを最初の状態に戻す」を押したときに、
@@ -954,7 +965,11 @@ function defaultRound(){
     mode: "floor"    // floor=切り捨て ／ ceil=切り上げ ／ round=四捨五入
   };
 }
-function roundConf(){ return (typeof S!=="undefined" && S && S.round) ? S.round : defaultRound(); }
+/* ★v10.7：締め済みの期間を計算しているあいだは、締めたときの丸め設定を使う（LOCK_CONF） */
+function roundConf(){
+  if(typeof LOCK_CONF!=="undefined" && LOCK_CONF && LOCK_CONF.round) return LOCK_CONF.round;
+  return (typeof S!=="undefined" && S && S.round) ? S.round : defaultRound();
+}
 /* 有効な丸め単位。2円以上のときだけ丸める（0/1は「丸めない」） */
 function roundUnit(){ const u = Math.round(+roundConf().unit||0); return u>1 ? u : 0; }
 function roundActive(){ return roundUnit()>0; }
@@ -968,6 +983,231 @@ function roundModeLabel(){
   const m = roundConf().mode;
   return m==="ceil" ? "切り上げ" : m==="round" ? "四捨五入" : "切り捨て";
 }
+/* =========================================================================
+   ★v10.7：締めのロック（2026-08-18 担当者さん確定）
+   -------------------------------------------------------------------------
+   なぜ要るのか
+     この道具は**原価をあとから入れる運用**にした（v10.4で原価をHTMLから抜いたため）。
+     ところが原価・丸め・ボーナスは、画面を開くたびに③原価タブと⑤設定から
+     計算し直している。つまり**締めて振り込んだあとに誰かが原価を入れると、
+     過去の給料が黙って動く**。原価を入れる人と締める人は別なので、これは必ず起きる。
+
+   どうするか（担当者さんの選択：「固定する＋締める前に検査」）
+     ・締めた瞬間の**設定を丸ごと控える**（原価・丸め・ボーナス・銘柄の固定原価）。
+       締め済みの期間を出すときは、いまの設定ではなく**この控えで計算する**。
+       → あとから③原価や⑤設定を触っても、締めた期間の給料は1円も動かない。
+     ・締めた瞬間の**キャストごとの支給額**も控える（下の pay）。控えの設定で
+       計算し直した額とズレたら画面に赤で出す（＝この道具のバグ検知）。
+     ・締める前に検査して、引っかかったら**締めさせない**（原価未入力など）。
+     ・①伝票・②出勤は、締め済みの期間の日付を**編集できなくする**。
+
+   ★出力（金額）ではなく入力（設定）を凍らせているのが肝。
+     金額だけ控える形にすると、紙の出勤表の「日ごとの行」はいまの設定で出てしまい、
+     縦計が控えと合わなくなる（v10.5でこの罠を一度踏んでいる）。
+     設定を凍らせれば、日ごとの行・給与明細・紙の出勤表が**全部そろって**締めた日と同じになる。
+
+   ★計算式そのものは触っていない。ロックは aggregate() の入口で設定を差し替えるだけ。
+   ========================================================================= */
+
+/* 締めの控えで計算しているあいだだけ中身が入る。ふだんは null。
+   ★var で宣言している。let だと、この行より前に呼ばれる関数から触ったときに例外になる。 */
+var LOCK_CONF = null;
+
+/* 「2026-08-first」のような鍵。前期／後期の1つぶんを表す */
+function lockKeyOf(ym, half){ return ym + "-" + (half==="second" ? "second" : "first"); }
+
+/* 期間（from〜to）が前期・後期ぴったりなら鍵と見出しを返す。ずれていたら null。
+   ★ロックは前期／後期まるごとの単位でしかかけない（半端な期間で締めさせない）。 */
+function halfOfRange(from, to){
+  if(!from || !to) return null;
+  const ym = from.slice(0,7);
+  if(to.slice(0,7) !== ym) return null;
+  const hs = ["first","second"];
+  for(let i=0;i<hs.length;i++){
+    const r = halfRange(ym, hs[i]);
+    if(r.from===from && r.to===to)
+      return {key:lockKeyOf(ym,hs[i]), label:r.label, from:from, to:to, ym:ym, half:hs[i]};
+  }
+  return null;
+}
+
+/* この期間を包んでいる締めを探す。
+   ★「ぴったり一致」ではなく「包んでいる」で探すのが大事。紙の出勤表は
+     aggregate(その日, その日) を日数分呼ぶので、1日ぶんの範囲でも控えを使わせないといけない。 */
+function lockFor(from, to){
+  if(!from || !to) return null;            // 全期間・片側だけの表示では控えを使わない
+  const L = S.locks || {};
+  const ks = Object.keys(L);
+  for(let i=0;i<ks.length;i++){
+    const x = L[ks[i]];
+    if(x && x.from && x.to && x.from <= from && to <= x.to) return x;
+  }
+  return null;
+}
+function lockList(){
+  const L = S.locks || {};
+  return Object.keys(L).map(k=>L[k]).filter(Boolean).sort((a,b)=> a.from.localeCompare(b.from));
+}
+function anyLock(){ return lockList().length > 0; }
+/* その日が締め済みか（①伝票・②出勤の編集止めに使う） */
+function lockOfDate(d){ return d ? lockFor(d, d) : null; }
+function lockAtLabel(L){
+  try{ return new Date(L.at).toLocaleString("ja-JP"); }catch(e){ return ""; }
+}
+
+/* --- 控えの設定を読む入口。ロック中はここが控えを返す --- */
+function confCosts(){
+  return (LOCK_CONF && LOCK_CONF.costs) ? LOCK_CONF.costs : ((typeof S!=="undefined" && S && S.costs) || {});
+}
+/* 銘柄に焼き付いている固定原価。ロック中は締めたときの値を使う */
+function confFixedCost(name){
+  if(LOCK_CONF && LOCK_CONF.fixedCost){
+    const v = LOCK_CONF.fixedCost[name];
+    return (v===undefined || v===null) ? null : v;
+  }
+  const m = BOTTLE_BY_NAME[name];
+  return (m && m.fixedCost!=null) ? m.fixedCost : null;
+}
+
+/* 締めるときに控える設定のかたまり。
+   ★ここに入れ忘れたものは「締めたあとから動く」ままになる。
+     設定を足したら（例：時給を⑤設定で変えられるようにしたら）ここにも足すこと。 */
+function snapConf(){
+  const fx = {};
+  ((S.master&&S.master.bottles)||[]).forEach(b=>{
+    if(b && b.fixedCost!=null) fx[b.name] = Math.round(+b.fixedCost);
+  });
+  return {
+    costs:     deepCopy(S.costs || {}),
+    round:     deepCopy(S.round || defaultRound()),
+    bonus:     deepCopy(S.bonus || defaultBonus()),
+    fixedCost: fx
+  };
+}
+
+/* 締める前の検査。返り値が空なら締められる。
+   ★止めるのは「あとから直すと、渡した額と合わなくなる」ものだけ。 */
+function lockPreflight(from,to){
+  const bad = [];
+  const H = halfOfRange(from,to);
+  if(!H){
+    bad.push("この期間は前期（1〜15日）・後期（16〜末日）ぴったりではありません。"
+           + "上の「締め（年月）」と「前期／後期」を選んで<b>「この締めで出す」</b>を押してください。");
+    return bad;                      // 期間が決まらないと他の検査に意味がない
+  }
+  if(S.locks && S.locks[H.key]){ bad.push("この期間はすでに締まっています。"); return bad; }
+  const R = aggregateLive(from,to);
+  if(!R.slips.length)
+    bad.push("この期間には伝票が1枚もありません。締める期間を間違えていないか確認してください。");
+  if(R.missing.length)
+    bad.push("<b>原価が未入力のボトルが "+R.missing.length+"件</b>あります（"
+           + R.missing.map(esc).join("、")+"）。そのボトルのバックが0円で計算されています。"
+           + "<b>③ボトル原価タブ</b>で入れてから締めてください。");
+  if((bonusConf().cast||"").trim() && !bonusLadder().length)
+    bad.push("ボーナスをもらう人は決まっているのに、<b>段（ラダー）が入っていません</b>。"
+           + "⑤設定で段を入れるか、もらう人を空にしてから締めてください。");
+  if(R.warn.length)
+    bad.push("<b>確認したいところが "+[...new Set(R.warn)].length+"件</b>残っています。"
+           + "下の「確認したいところ」を直してから締めてください。");
+  /* ★伝票に名前が出ているのに出勤・退勤が空の人。
+     検算は「打ち込みの事故」を見つけられない（担当者さんが実際に踏んだ）。
+     ここが唯一それを拾える場所なので、警告ではなく止める。
+     ※本当に出勤していない人に名前が付いてしまう形（ボトルの分割先だけなど）が
+       現場で出たら、ここは警告に落としてよい。 */
+  const noTime = [];
+  const days = [];
+  R.slips.forEach(s=>{ if(s.date && days.indexOf(s.date)<0) days.push(s.date); });
+  days.sort().forEach(d=>{
+    const day = (S.att||{})[d] || {};
+    castsInSlips(d).forEach(n=>{
+      const r = day[n] || {};
+      if(!r.in || !r.out) noTime.push((+d.slice(5,7))+"/"+(+d.slice(8,10))+" "+n);
+    });
+  });
+  if(noTime.length)
+    bad.push("<b>出勤・退勤の時刻が空の人が "+noTime.length+"件</b>あります（"
+           + noTime.slice(0,12).map(esc).join("、") + (noTime.length>12?" ほか":"")
+           + "）。<b>②出勤時間タブ</b>で入れてから締めてください（時給分が0円で計算されています）。");
+  return bad;
+}
+
+/* 締めの控えを組み立てる（画面を出さない部分だけ）。★検算からも呼ぶ。
+   list は確認ダイアログ用に付けているだけなので、保存されても害はない…が
+   金額を二重に持つと後で食い違うもとなので、保存する前に外す。 */
+function buildLock(from,to){
+  const H = halfOfRange(from,to); if(!H) return null;
+  const R = aggregateLive(from,to);
+  const list = Object.keys(R.casts).map(k=>R.casts[k]).filter(c=>c.pay>0||c.sales>0||c.min>0);
+  const pay = {}; list.forEach(c=>{ pay[c.name] = c.pay; });
+  const hist = (S.lockLog||[]).filter(x=>x.key===H.key);
+  const prev = hist.length ? hist[hist.length-1] : null;
+  const L = {key:H.key, label:H.label, from:from, to:to,
+             at:new Date().toISOString(), conf:snapConf(),
+             pay:pay, total:list.reduce((t,c)=>t+c.pay,0),
+             prev: prev ? {at:prev.at, total:prev.total} : null};
+  // 確認ダイアログ用の付録。保存はされるが計算には一切使わない
+  Object.defineProperty(L, "list", {value:list, enumerable:false});
+  Object.defineProperty(L, "prevRaw", {value:prev, enumerable:false});
+  return L;
+}
+
+/* この期間を締める */
+function doLock(from,to){
+  const bad = lockPreflight(from,to);
+  if(bad.length){
+    const box = document.getElementById("lockBad");
+    if(box) box.innerHTML = '<div class="msg ng" style="margin-top:9px">'
+      + '<b>まだ締められません（'+bad.length+'件）</b><br>' + bad.map(x=>"・"+x).join("<br>") + '</div>';
+    else alert("まだ締められません：\n\n"+bad.map(x=>"・"+x.replace(/<[^>]+>/g,"")).join("\n"));
+    return;
+  }
+  const H = halfOfRange(from,to);
+  const NL = buildLock(from,to);
+  const list = NL.list, total = NL.total, prev = NL.prev;
+  if(!confirm(H.label+"（"+from+" 〜 "+to+"）を締めます。\n\n"
+    + "支給 "+list.length+"人 ／ 合計 "+yen(total)+"円\n"
+    + (prev ? "前に締めたとき "+yen(prev.total)+"円 → 今回 "+yen(total)+"円\n" : "")
+    + "\n締めると：\n"
+    + "・この期間の伝票と出勤時間は編集できなくなります\n"
+    + "・あとから原価・丸め・ボーナスを直しても、この期間の給料は動きません\n\n"
+    + "よろしいですか？（あとから解除できます）")) return;
+  S.locks = S.locks || {};
+  S.locks[H.key] = NL;
+  save(); renderAll();
+  alert(H.label+" を締めました。\n\n合計 "+yen(total)+"円（"+list.length+"人）\n\n"
+      + "この期間の金額は、これ以上動きません。");
+}
+/* 締めを解除する。控えは消さずに lockLog に残す（締め直したとき差額が出せる） */
+function doUnlock(key){
+  const L = (S.locks||{})[key]; if(!L) return;
+  if(!confirm("【"+L.label+"】の締めを解除します。\n\n"
+    + "解除すると：\n"
+    + "・この期間の伝票と出勤時間が、また編集できるようになります\n"
+    + "・給料が「いまの設定」で計算し直されます（金額が変わることがあります）\n\n"
+    + "締めたときの金額（合計 "+yen(L.total)+"円）は控えとして残るので、\n"
+    + "締め直したときに差額が出ます。\n\nよろしいですか？")) return;
+  S.lockLog = S.lockLog || [];
+  S.lockLog.push(Object.assign({}, L, {unlockedAt:new Date().toISOString()}));
+  delete S.locks[key];
+  save(); renderAll();
+}
+
+/* 締め済みの伝票・出勤の画面を「読むだけ」にする */
+function lockDownBox(box, L, what){
+  box.querySelectorAll("input,select,textarea,button").forEach(el=>{ el.disabled = true; });
+  box.insertAdjacentHTML("afterbegin",
+    '<div class="msg warn"><b>🔒 '+esc(L.label)+' は締め済みです。</b>'+esc(what)+'は編集できません。<br>'
+    + '直す必要があるときは、<b>④締め・給与タブ</b>で締めを解除してください。</div>');
+}
+/* ③原価・⑤設定に出す注記（触っても締め済みには効かないこと） */
+function lockNoteHTML(){
+  if(!anyLock()) return "";
+  return '<div class="msg ok"><b>🔒 締め済みの期間があります：</b>'
+    + lockList().map(x=>esc(x.label)).join("、") + '。<br>'
+    + 'ここを直しても<b>締め済みの期間の給料は動きません</b>（締めたときの設定で固定されています）。'
+    + '締め済みの期間を直したいときは、④締め・給与タブで締めを解除してください。</div>';
+}
+
 function load(){
   try{
     const raw = localStorage.getItem(KEY);
@@ -997,6 +1237,10 @@ function migrate(o){
     if(o.round.unit==null) o.round.unit = 10;
     if(!o.round.mode)      o.round.mode = "floor";
   }
+  /* ★v10.7：締めのロック。v10.6以前のデータには無いので空で入れる
+     （＝何も締まっていない状態。金額はいままでと1円も変わらない）。 */
+  if(!o.locks || typeof o.locks!=="object") o.locks = {};
+  if(!Array.isArray(o.lockLog))             o.lockLog = [];
   // v8以前のデータには master が無い。初期値を入れる（＝今までと同じ内容になる）
   if(!o.master || typeof o.master!=="object") o.master = defaultMaster();
   const m = o.master;
@@ -1157,11 +1401,14 @@ function accounting(sp){
      焼き付いた行は、あとで仕入れ値を変えても動かない。
      まだ入っていない行は、いままで通り `S.costs` を見るので後から入れられる。 */
 function costOf(name, line){
-  const m = BOTTLE_BY_NAME[name];
-  if(m && m.fixedCost!=null) return m.fixedCost;
+  /* ★v10.7：締め済みの期間を計算しているあいだは、締めたときの原価を使う。
+     ここを BOTTLE_BY_NAME / S.costs の直読みに戻すと、締めたあとに原価を入れた瞬間に
+     過去の給料が動く（ロックが効かなくなる）。 */
+  const fx = confFixedCost(name);
+  if(fx!=null) return fx;
   if(line && line.costAt!=null && line.costAt!=="" && !isNaN(+line.costAt))
     return Math.round(+line.costAt);
-  const v = S.costs[name];
+  const v = confCosts()[name];
   return (v===""||v==null||isNaN(+v)) ? null : Math.round(+v);
 }
 
@@ -1184,7 +1431,11 @@ function costOf(name, line){
      （2026-08-16 担当者さん判断：自動だけでいい）。
    ========================================================================= */
 /* 検算は S を差し替えて走るので、bonus が無い状態でも落ちないようにする */
-function bonusConf(){ return (typeof S!=="undefined" && S && S.bonus) ? S.bonus : defaultBonus(); }
+/* ★v10.7：締め済みの期間を計算しているあいだは、締めたときのボーナス設定を使う（LOCK_CONF） */
+function bonusConf(){
+  if(typeof LOCK_CONF!=="undefined" && LOCK_CONF && LOCK_CONF.bonus) return LOCK_CONF.bonus;
+  return (typeof S!=="undefined" && S && S.bonus) ? S.bonus : defaultBonus();
+}
 
 /* 段を「使える形」に整える。空欄・0・打ちかけの行は捨て、売上ラインの小さい順に並べる。
    ⑤設定では好きな順に足せるので、並べ替えはここで引き受ける */
@@ -1247,7 +1498,21 @@ function bonusHitsInRange(from,to){
 /* =========================================================================
    集計（給与・売上・警告）
    ========================================================================= */
+/* ★v10.7：締め済みの期間なら、締めたときの設定に差し替えてから計算する。
+   計算式そのものは aggregateLive() のまま（1行も触っていない）。
+   ★ここを素通りさせると、締めた期間の給料があとから動くようになる。 */
 function aggregate(from,to){
+  const L = lockFor(from,to);
+  if(!L) return aggregateLive(from,to);
+  const keep = LOCK_CONF;                    // 入れ子で呼ばれても壊れないように控えて戻す
+  LOCK_CONF = L.conf || null;
+  try{
+    const R = aggregateLive(from,to);
+    R.lock = L;
+    return R;
+  }finally{ LOCK_CONF = keep; }
+}
+function aggregateLive(from,to){
   const slips = S.slips.filter(s=>inRange(s.date,from,to));
   const A = {};                       // cast -> 集計
   const warn = [];
@@ -1477,7 +1742,7 @@ function renderSlipList(){
   box.innerHTML = list.map(s=>{
     const a = accounting(s);
     return '<div class="slip-item'+(s.id===S.ui.slipId?" on":"")+'" data-open="'+s.id+'">'
-      + '<div class="t"><b>'+esc(s.date)+(s.no?" No."+esc(s.no):"")+'</b> '
+      + '<div class="t"><b>'+(lockOfDate(s.date)?"🔒 ":"")+esc(s.date)+(s.no?" No."+esc(s.no):"")+'</b> '
       + '<span class="muted">係:'+esc(kakariLabel(s))+' / '+esc(s.guests)+'名'
       + (s.dohan?" / 同伴":"")+' / '+(s.pay==="card"?"カード":"現金")+'</span></div>'
       + '<div class="amt"><b>'+yen(a.total)+'円</b><div class="muted">明細 '+yen(a.sub)+'</div></div></div>';
@@ -1756,6 +2021,12 @@ function renderSlipEditor(){
     if(!confirm("この伝票を削除します。よろしいですか？")) return;
     S.slips = S.slips.filter(x=>x.id!==sp.id); S.ui.slipId=null; save(); renderSlip();
   };
+  /* ★v10.7：締め済みの期間の伝票は編集できない。
+     入力欄とボタンを全部止めて、理由を上に出す（読むのはできる）。
+     ★ここを外すと、締めたあとに伝票を直して金額が動く（ロックの意味が無くなる）。 */
+  const LKS = lockOfDate(sp.date);
+  if(LKS) lockDownBox(box, LKS, "この伝票");
+
   // 触っていた欄に戻す
   if(keepKey){
     const el = box.querySelector('[data-p="'+keepKey+'"]');
@@ -1889,6 +2160,10 @@ function renderAtt(){
     // 退勤が出勤より前になっていたら、日またぎとして扱う（いままでと同じ）
     save(); renderAtt();
   }));
+
+  /* ★v10.7：締め済みの日の出勤時間は編集できない（時給分が動いてしまうため） */
+  const LKA = lockOfDate(d);
+  if(LKA) lockDownBox(box, LKA, "この日の出勤時間");
 }
 
 /* =========================================================================
@@ -1896,6 +2171,10 @@ function renderAtt(){
    ========================================================================= */
 function renderCost(){
   const from=document.getElementById("costFrom").value, to=document.getElementById("costTo").value;
+  {  // ★v10.7：締め済みの期間には効かないことを知らせる
+    const nb = document.getElementById("lockNoteCost");
+    if(nb) nb.innerHTML = lockNoteHTML();
+  }
   const names = [];
   S.slips.filter(s=>inRange(s.date,from,to)).forEach(s=>s.bottles.forEach(b=>{
     if(b.name && !names.includes(b.name)) names.push(b.name);
@@ -1999,6 +2278,7 @@ function lastPrice(name){
 function renderPay(){
   const from=document.getElementById("payFrom").value, to=document.getElementById("payTo").value;
   const R = aggregate(from,to);
+  renderLockBox(from,to,R);          // ★v10.7：締めの状態と「締める／解除」ボタン
   const wbox = document.getElementById("payWarn");
   let w = "";
   if(R.missing.length)
@@ -2113,6 +2393,60 @@ function renderPay(){
             +'<td class="n">あと '+yen(next.sales-acc)+'</td></tr>'
           : '<tr><td class="muted">ボーナス</td><td class="n">全部の段に到達済み</td></tr>');
   }
+}
+/* ★v10.7：④タブの一番上に出す、締めの状態と操作。
+   ここで出す金額は控えではなく「控えの設定で計算し直した額」。
+   だから控え（L.pay）とズレたらこの道具のバグ＝赤で出す。 */
+function renderLockBox(from,to,R){
+  const box = document.getElementById("lockBox"); if(!box) return;
+  const H = halfOfRange(from,to);
+  const L = (H && (S.locks||{})[H.key]) ? S.locks[H.key] : null;
+  let h = "";
+  if(L){
+    const diff = [];
+    Object.keys(L.pay||{}).forEach(n=>{
+      const now = Math.round(((R.casts||{})[n]||{}).pay || 0);
+      if(now !== Math.round(L.pay[n]))
+        diff.push(n+"：締め "+yen(L.pay[n])+"円 → いま "+yen(now)+"円");
+    });
+    h += '<div class="msg '+(diff.length?"ng":"ok")+'">'
+      + '<b>🔒 '+esc(L.label)+' は締め済みです</b>　<span class="muted">'+esc(lockAtLabel(L))+' に締め</span><br>'
+      + '支給 合計 <b>'+yen(L.total)+'円</b>。この期間の伝票・出勤時間は編集できません。<br>'
+      + 'あとから原価・丸め・ボーナスを直しても、<b>この期間の金額は動きません</b>'
+      + '（締めたときの設定で計算しています）。'
+      + (L.prev ? '<br><span class="muted">前に締めたとき '+yen(L.prev.total)+'円 → 今回 '+yen(L.total)+'円'
+                  + '（差 '+(L.total-L.prev.total>=0?"＋":"−")+yen(Math.abs(L.total-L.prev.total))+'円）</span>' : '')
+      + (diff.length
+          ? '<div class="hr"></div><b>★控えと計算が合っていません（'+diff.length+'件）。</b>'
+            + 'この道具の不具合です。締めた額（上の合計）が正しいので、そのまま払ってください。<br>'
+            + diff.map(esc).join("<br>")
+          : '')
+      + '<div style="margin-top:9px"><button class="btn" id="btnUnlock">🔓 締めを解除</button></div>'
+      + '</div>';
+  }else if(H){
+    h += '<div class="msg"><b>'+esc(H.label)+'（'+esc(from)+' 〜 '+esc(to)+'）はまだ締まっていません。</b><br>'
+      + '締めると金額が固定されて、あとから原価・丸め・ボーナスを直しても動かなくなります。'
+      + 'この期間の伝票と出勤時間も編集できなくなります（解除すれば戻ります）。'
+      + '<div style="margin-top:9px"><button class="btn pri" id="btnLock">🔒 この期間を締める</button></div>'
+      + '<div id="lockBad"></div></div>';
+  }else{
+    const enc = lockFor(from,to);
+    h += enc
+      ? '<div class="msg ok">🔒 この期間は【'+esc(enc.label)+'】の締めの中にあります。'
+        + '金額は締めたときの設定で計算しているので動きません。伝票・出勤時間は編集できません。</div>'
+      : '<div class="msg"><span class="muted">締められるのは<b>前期（1〜15日）・後期（16〜末日）まるごと</b>です。'
+        + '上の「締め（年月）」と「前期／後期」を選んで「この締めで出す」を押すと、締めるボタンが出ます。'
+        + (anyLock()?'<br>いまの表示は締めの控えを使っていません（期間が締めの単位と違うため）。':'')
+        + '</span></div>';
+  }
+  const all = lockList();
+  if(all.length)
+    h += '<div class="msg" style="margin-top:8px"><b>締め済みの期間</b><br>'
+       + all.map(x=>'🔒 '+esc(x.label)+'　'+esc(x.from)+' 〜 '+esc(x.to)+'　'+yen(x.total)+'円').join("<br>")
+       + '</div>';
+  box.innerHTML = h;
+  const bl = document.getElementById("btnLock");   if(bl) bl.onclick = ()=>doLock(from,to);
+  const bu = document.getElementById("btnUnlock"); if(bu) bu.onclick = ()=>doUnlock(L.key);
 }
 function sum(a,k){ return a.reduce((t,x)=>t+x[k],0); }
 
@@ -2467,6 +2801,10 @@ function bottleCats(){
 }
 
 function renderSet(){
+  {  // ★v10.7：締め済みの期間には効かないことを知らせる
+    const nb = document.getElementById("lockNoteSet");
+    if(nb) nb.innerHTML = lockNoteHTML();
+  }
   const sn=document.getElementById("storeName");
   if(document.activeElement!==sn) sn.value = (S.store&&S.store.name)||"";
   const M = S.master;
@@ -2906,7 +3244,8 @@ function KYABA_TEST(){
   const T = (casts,slips,att,costs)=>{
     // ★v10.3：bonus も入れておく（段は空なので、ボーナスは1円も付かない＝他の章の期待値は動かない）
     S={casts,slips,att:att||{},costs:costs||{},ui:{},
-       bonus:defaultBonus(), round:defaultRound(), master:defaultMaster()};
+       bonus:defaultBonus(), round:defaultRound(), master:defaultMaster(),
+       locks:{}, lockLog:[]};   // ★v10.7：何も締まっていない状態から始める
     syncMaster();
   };
   /* ★v10.4：オリシャンの原価はHTMLから抜いた（このファイルをネットに置くため → 14章）。
@@ -3764,6 +4103,129 @@ function KYABA_TEST(){
       }
     }
 
+    out.push("");
+    out.push("── 26. ★締めのロック（v10.7：2026-08-18 担当者さん確定「固定する＋締める前に検査」） ──");
+    {
+      /* 締めたあとに③原価や⑤設定を触っても、締めた期間の給料が1円も動かないこと。
+         これが崩れると「振り込んだ額と画面の額が違う」が起きる。★この章が本体。 */
+      const F="2026-08-01", To="2026-08-15";
+      const mkL = d => Object.assign(newSlip(d),{no:"1", guests:1, kakari:"ママ", pay:"cash",
+                        bottles:[{name:"山崎", price:35000, qty:1, splits:[]}]});
+      const ATT = {"2026-08-05":{"ママ":{in:"20:00", out:"1:00"}}};
+      const setUp = cost => T(["ママ"],[mkL("2026-08-05")], ATT, {"山崎":cost});
+      // 締める（画面を出さずに控えだけ作る）
+      const lockIt = () => { const L=buildLock(F,To); S.locks[L.key]=L; return L; };
+
+      out.push("  ・期間の見分け");
+      eq("前期ぴったりなら締められる", (halfOfRange(F,To)||{}).key, "2026-08-first");
+      eq("後期ぴったりなら締められる", (halfOfRange("2026-08-16","2026-08-31")||{}).key, "2026-08-second");
+      eq("★半端な期間は締められない（1〜10日）", halfOfRange(F,"2026-08-10"), null);
+      eq("★月をまたぐ期間は締められない", halfOfRange(F,"2026-09-15"), null);
+      eq("全期間（空）は締められない", halfOfRange("",""), null);
+
+      out.push("  ・締める前の検査");
+      setUp("");                                   // 原価が未入力
+      eq("★原価未入力だと締められない",
+         lockPreflight(F,To).some(x=>x.indexOf("原価が未入力")>=0), true);
+      setUp(20000);
+      eq("★半端な期間だと締められない",
+         lockPreflight(F,"2026-08-10").some(x=>x.indexOf("ぴったりではありません")>=0), true);
+      T(["ママ"],[mkL("2026-08-05")], {}, {"山崎":20000});   // 出勤時間を入れていない
+      eq("★出勤時間が空だと締められない",
+         lockPreflight(F,To).some(x=>x.indexOf("出勤・退勤の時刻が空")>=0), true);
+      setUp(20000);
+      eq("伝票が1枚も無い期間は締められない",
+         lockPreflight("2026-09-01","2026-09-15").some(x=>x.indexOf("伝票が1枚もありません")>=0), true);
+      // ボーナスをもらう人はいるのに段が空（初期状態そのまま）＝止める
+      setUp(20000); S.bonus = {cast:"ママ", taxIncluded:true, ladder:[]};
+      eq("★ボーナスの段が空だと締められない",
+         lockPreflight(F,To).some(x=>x.indexOf("段（ラダー）が入っていません")>=0), true);
+      setUp(20000); S.bonus = {cast:"", taxIncluded:true, ladder:[]};
+      eq("★そろっていれば締められる（検査0件）", lockPreflight(F,To), []);
+
+      out.push("  ・締める前の金額（時給7,500＋誘客500＋ボトルバック3,000）");
+      setUp(20000); S.bonus = {cast:"", taxIncluded:true, ladder:[]};
+      eq("時給分 5時間 ＝ 7,500円",      aggregate(F,To).casts["ママ"].hour, 7500);
+      eq("ボトルバック (35,000−20,000)×20% ＝ 3,000円", aggregate(F,To).casts["ママ"].bottle, 3000);
+      eq("日当 11,000円",               aggregate(F,To).casts["ママ"].pay, 11000);
+
+      out.push("  ・★締めたあとに原価を直しても動かない");
+      const L1 = lockIt();
+      eq("控えの合計は 11,000円", L1.total, 11000);
+      S.costs["山崎"] = 10000;                     // 原価を半額に直す（担当が別の人）
+      eq("★締め済み → 11,000円のまま",  aggregate(F,To).casts["ママ"].pay, 11000);
+      eq("★ロックを通さなければ 13,000円に動く（計算式は生きている）",
+         aggregateLive(F,To).casts["ママ"].pay, 13000);
+      eq("★1日だけ出しても控えを使う（紙の出勤表がここを通る）",
+         aggregate("2026-08-05","2026-08-05").casts["ママ"].pay, 11000);
+      eq("締めの印が付いて返る", (aggregate(F,To).lock||{}).key, "2026-08-first");
+      eq("その日が締め済みだと分かる", (lockOfDate("2026-08-05")||{}).key, "2026-08-first");
+      eq("締めの外の日は締め済みではない", lockOfDate("2026-08-20"), null);
+
+      out.push("  ・★締めたあとに丸め・ボーナスを直しても動かない");
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]}; lockIt();
+      S.round = {unit:10000, mode:"floor"};        // 1万円単位で切り捨てに変える
+      eq("★丸めを変えても 11,000円のまま", aggregate(F,To).casts["ママ"].pay, 11000);
+      eq("★ロックなしなら 10,000円に落ちる", aggregateLive(F,To).casts["ママ"].pay, 10000);
+
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]}; lockIt();
+      S.bonus = {cast:"ママ", taxIncluded:true, ladder:[{sales:30000, amount:20000}]};
+      eq("★ボーナスの段を足しても 11,000円のまま", aggregate(F,To).casts["ママ"].pay, 11000);
+      eq("★ロックなしなら 31,000円になる",  aggregateLive(F,To).casts["ママ"].pay, 31000);
+
+      out.push("  ・★銘柄の固定原価（⑤設定）を直しても動かない");
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]}; lockIt();
+      {
+        const b = S.master.bottles.find(x=>x.name==="山崎");
+        b.fixedCost = 5000; syncMaster();          // ⑤設定で固定原価を入れてしまった
+        eq("★締め済みは 11,000円のまま", aggregate(F,To).casts["ママ"].pay, 11000);
+        eq("★ロックなしなら 14,000円に動く", aggregateLive(F,To).casts["ママ"].pay, 14000);
+        b.fixedCost = null; syncMaster();
+      }
+
+      out.push("  ・締めていない期間はいままで通り動く");
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]};
+      eq("締める前は原価を直したら動く（v10.6までと同じ）",
+         [aggregate(F,To).casts["ママ"].pay,
+          (function(){ S.costs["山崎"]=10000; return aggregate(F,To).casts["ママ"].pay; })()],
+         [11000, 13000]);
+
+      out.push("  ・解除したら動くようになる（控えは残る）");
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]};
+      const L2 = lockIt();
+      S.lockLog.push(Object.assign({}, L2, {unlockedAt:"x"}));
+      delete S.locks[L2.key];
+      S.costs["山崎"] = 10000;
+      eq("★解除後はいまの設定で計算し直される", aggregate(F,To).casts["ママ"].pay, 13000);
+      eq("控えは lockLog に残っている", (S.lockLog[0]||{}).total, 11000);
+      {
+        const L3 = buildLock(F,To);                // 締め直す
+        eq("★締め直すと前回の額が付いてくる（差額が出せる）",
+           [(L3.prev||{}).total, L3.total], [11000, 13000]);
+      }
+
+      out.push("  ・紙の出勤表・給与明細も控えで出る（日ごとの縦計が合う）");
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]}; lockIt();
+      S.costs["山崎"] = 10000;                     // 締めたあとに原価が変わった状態
+      {
+        const sh = sheetHTML("ママ", F, To);
+        eq("★紙の縦計に警告が出ない", sh.indexOf('class="msg ng"')<0, true);
+        eq("★紙に出る日当も締めたときの額", sh.indexOf("¥11,000")>=0, true);
+        eq("直したあとの額（13,000）は紙に出ない", sh.indexOf("¥13,000")>=0, false);
+      }
+
+      out.push("  ・控えと計算がズレていないこと（画面に赤を出す仕組みの元）");
+      setUp(20000); S.bonus={cast:"",taxIncluded:true,ladder:[]};
+      {
+        const L4 = lockIt();
+        S.costs["山崎"] = 10000; S.round = {unit:10000, mode:"floor"};
+        const now = aggregate(F,To).casts["ママ"].pay;
+        eq("★控えの額と、控えの設定で計算し直した額が一致する", now, L4.pay["ママ"]);
+      }
+      // 使った状態を片付ける（次の章に持ち越さない）
+      T(["ママ"],[]);
+    }
+
   }catch(e){
     ng++; out.push("！ FAIL 例外: "+e.message+"\n"+e.stack);
   }finally{
@@ -3807,6 +4269,13 @@ document.getElementById("attDate").addEventListener("change",renderAtt);
 ["payFrom","payTo"].forEach(id=>document.getElementById(id).addEventListener("change",renderPay));
 
 document.getElementById("btnNewSlip").onclick=()=>{
+  /* ★v10.7：締め済みの日には新しい伝票を作れない */
+  {
+    const d = document.getElementById("slipDate").value||todayStr();
+    const L = lockOfDate(d);
+    if(L){ alert("🔒 "+L.label+" は締め済みです。\n\n"+d+" の伝票は追加できません。\n"
+                +"④締め・給与タブで締めを解除してください。"); return; }
+  }
   const sp=newSlip(document.getElementById("slipDate").value||todayStr());
   sp.sets.push({kind:SET_KINDS[0].name,qty:1});
   S.slips.push(sp); S.ui.slipId=sp.id; save(); renderSlip();
