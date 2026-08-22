@@ -57,6 +57,49 @@ input[type=date]{min-width:150px}
 .blk>h3{margin:0 0 8px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--accent-bg);color:var(--accent)}
 .amt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* ★v10.9⑦ カレンダー。
+   ★どのマスも押せる（伝票が無い日も選べる）。無い日を選べないと
+     「この日に打ちたい」ときに手が止まる。伝票がある日は色を濃くして目で分かるようにする。 */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{text-align:center;font-size:11px;color:var(--sub);font-weight:700;padding:2px 0}
+.cal-dow.sun{color:var(--ng)} .cal-dow.sat{color:var(--accent)}
+.cal-cell{display:block;width:100%;text-align:left;font-family:inherit;cursor:pointer;
+  border:1px solid var(--line);border-radius:8px;min-height:64px;padding:4px 5px;background:#fbfcfd}
+.cal-cell:hover{background:var(--accent-bg);border-color:var(--accent)}
+.cal-cell.pad{visibility:hidden;cursor:default;border:none;background:none}
+.cal-cell.has{background:#fff;border-color:#c3d3ee}
+.cal-cell.on{outline:2px solid var(--accent);outline-offset:-1px;background:var(--accent-bg);border-color:var(--accent)}
+.cal-cell .d,.cal-cell .s,.cal-cell .n{display:block}
+.cal-cell .d{font-size:12px;font-weight:700;color:var(--ink)}
+.cal-cell .d.sun{color:var(--ng)} .cal-cell .d.sat{color:var(--accent)}
+/* ★今日の丸。display:inline-block を必ず付ける──上の .d は block なので、
+   そのままだと黒帯がマスの幅いっぱいに伸びて日付が読めなくなる（2026-08-22に実際に発生） */
+.cal-cell.today .d{display:inline-block;background:var(--ink);color:#fff;border-radius:20px;padding:0 7px;min-width:22px;text-align:center}
+.cal-cell .s{font-size:11px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;
+  margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-cell .n{font-size:10px;color:var(--sub)}
+/* ★v10.9b⑦ 伝票カード（2026-08-22 担当者さん要望：紙の伝票の形で、横に4枚ずつ）
+   ★せまい画面では列を減らす。4列のままだと明細が潰れて読めない。 */
+.slip-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:1100px){ .slip-cards{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:860px){  .slip-cards{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:560px){  .slip-cards{grid-template-columns:1fr} }
+.slip-card{border:1px solid var(--line);border-radius:8px;background:#fff;
+  display:flex;flex-direction:column;overflow:hidden}
+.slip-card.locked{background:#fbfcfd}
+.slip-card .hd{background:#f3f6fa;border-bottom:1px solid var(--line);padding:6px 9px}
+.slip-card .hd .no{font-size:13px;font-weight:700}
+.slip-card .hd .sub{font-size:11px;color:var(--sub);display:block;margin-top:1px}
+.slip-card .bd{padding:6px 9px;flex:1 1 auto;font-size:11.5px}
+.slip-card .grp{font-size:10px;font-weight:700;color:var(--sub);margin:5px 0 1px}
+.slip-card .grp:first-child{margin-top:0}
+.slip-card .ln{display:flex;justify-content:space-between;gap:8px;padding:1px 0}
+.slip-card .ln .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slip-card .ln .yn{flex:0 0 auto;font-variant-numeric:tabular-nums}
+.slip-card .ln.minus .yn{color:var(--ng)}
+.slip-card .ft{border-top:1px solid var(--line);background:#fbfcfd;padding:6px 9px;
+  display:flex;align-items:center;justify-content:space-between;gap:6px}
+.slip-card .ft .tt{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
 th{background:#f2f5f9;font-size:11px;color:var(--sub);font-weight:700;white-space:nowrap}
@@ -160,6 +203,13 @@ table.box td.num{text-align:right}
     color:var(--sub);font-weight:600;margin-bottom:3px}
   .gl-att,.gl-cost{grid-template-columns:1fr !important}
   nav button{padding:11px 10px;font-size:12px}
+  /* ★v10.9⑦：スマホでも7列のまま。列を減らすとカレンダーに見えなくなるので、
+     マスを低くして文字を詰める方で合わせる。 */
+  .cal-grid{gap:3px}
+  .cal-cell{min-height:54px;padding:3px 3px}
+  .cal-cell .d{font-size:11px}
+  .cal-cell .s{font-size:10px}
+  .cal-cell .n{font-size:9px}
   /* 分割の1行：キャスト名の欄が潰れるので折り返す */
   .split-row{flex-wrap:wrap}
   .split-row select{flex:1 1 100%}
@@ -171,7 +221,7 @@ table.box td.num{text-align:right}
 <body>
 
 <header>
-  <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v10.7</span></h1>
+  <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v10.9</span></h1>
   <div class="sub">給料 ＝ 1,500円 × 勤務時間（30分切捨） ＋ バック　／　データは この端末のブラウザ内 のみに保存されます</div>
   <!-- ★v10.7：取扱説明書（検索できる。スマホで見ながらPCで操作する用） -->
   <div class="sub" style="margin-top:5px">
@@ -188,6 +238,10 @@ table.box td.num{text-align:right}
   <button data-t="pay">④ 締め・給与</button>
   <button data-t="set">⑤ 設定</button>
   <button data-t="test">⑥ 検算</button>
+  <!-- ★v10.9⑦：カレンダー（お店の要望③④・2026-08-22）
+       ★一番うしろに足すこと。前に差し込むと①〜⑥の番号が全部ずれて、
+         本文と取扱説明書の「③ボトル原価タブで〜」式の案内が全部うそになる。 -->
+  <button data-t="cal">⑦ カレンダー</button>
 </nav>
 
 <main>
@@ -195,16 +249,33 @@ table.box td.num{text-align:right}
 <!-- ============ ① 伝票入力 ============ -->
 <section id="s-slip" class="on">
   <div class="card">
-    <h2>伝票を打つ <span class="note">紙の伝票1枚 ＝ ここ1件</span></h2>
+    <h2>伝票を打つ <span class="note">紙の伝票1枚 ＝ ここ1件。打ち終わった伝票を見る・直すのは⑦カレンダーから</span></h2>
     <div class="row">
       <div class="date"><label>表示する日</label><input type="date" id="slipDate"></div>
       <div style="flex:0 0 auto"><button class="btn pri" id="btnNewSlip">＋ 新しい伝票</button></div>
-      <div style="flex:0 0 auto"><button class="btn" id="btnAllSlips">全部の日を表示</button></div>
     </div>
     <div class="hr"></div>
-    <div id="slipList"></div>
+    <!-- ★v10.9①：「何月何日 伝票◯枚」（お店の要望①・2026-08-22）
+         打っている本人が「いま何日を見ているか・何枚打ったか」を見失う画面だった。
+         枚数は 0 枚でも出す（「まだ無い」のか「日付を間違えている」のかを区別するため）。 -->
+    <div id="slipHead"></div>
   </div>
   <div id="slipEditor"></div>
+  <!-- ★v10.9②：一番下にも「＋ 新しい伝票」（お店の要望②・2026-08-22）
+       ★★置き場所は「伝票の中身（会計）のうしろ」。★一覧のうしろではない。
+         2026-08-22にいちど一覧のうしろに置いて、担当者さんに違うと言われた。
+         手が止まるのは「打ち終わって会計を見たところ」であって、一覧の下ではない。
+         一覧とエディタのあいだに置くと、下まで打った人の目にはそもそも入らない。
+       配線は上のボタンと同じ処理を使い回す（締め済みチェックを二重に書かない）。 -->
+  <div id="slipListFoot" style="display:none;margin-bottom:14px">
+    <!-- ★v10.9b②：打ち終わったところに置く2つのボタン（2026-08-22 担当者さん要望）
+         ★「入力完了」は保存ボタンではない。**閉じるボタン**。
+           欄を打つたびに save() が走っていて、保存はもう済んでいる（配線は data-p のところ）。
+           押した人が「保存されずに消えた」と思わないよう、必ず控えの文を出すこと。 -->
+    <button class="btn pri" id="btnSlipDone">✓ 入力完了</button>
+    <button class="btn" id="btnNewSlip2">＋ 続けて新しい伝票</button>
+    <div id="slipDoneMsg" class="muted" style="font-size:12px;margin-top:6px"></div>
+  </div>
 </section>
 
 <!-- ============ ② 出勤時間 ============ -->
@@ -283,7 +354,6 @@ table.box td.num{text-align:right}
       <div class="date"><label>期間（開始）</label><input type="date" id="payFrom"></div>
       <div class="date"><label>（終了）</label><input type="date" id="payTo"></div>
       <div style="flex:0 0 auto"><button class="btn" id="btnPayToday">今日だけ</button></div>
-      <div style="flex:0 0 auto"><button class="btn" id="btnPayAll">全期間</button></div>
     </div>
   </div>
   <!-- ★v10.7：締めのロック（2026-08-18） -->
@@ -482,6 +552,23 @@ table.box td.num{text-align:right}
     <div style="margin:10px 0"><button class="btn pri" id="btnTest">検算を実行</button></div>
     <div id="testOut">「検算を実行」を押してください。</div>
   </div>
+</section>
+
+<!-- ============ ⑦ カレンダー（★v10.9・お店の要望③④） ============ -->
+<section id="s-cal">
+  <div class="card">
+    <h2>カレンダー <span class="note">日を押すと、その日の伝票と人件費が下に出ます。直すときは伝票カードの「直す」から</span></h2>
+    <div class="row">
+      <div style="flex:0 0 auto"><button class="btn" id="btnCalPrev">◀ 前の月</button></div>
+      <div style="flex:0 0 150px"><label>見る月</label><input type="month" id="calYm"></div>
+      <div style="flex:0 0 auto"><button class="btn" id="btnCalNext">次の月 ▶</button></div>
+      <div style="flex:0 0 auto"><button class="btn" id="btnCalToday">今日の月</button></div>
+    </div>
+    <div class="hr"></div>
+    <div id="calSum"></div>
+    <div id="calGrid"></div>
+  </div>
+  <div id="calDetail"></div>
 </section>
 
 </main>
@@ -1779,20 +1866,38 @@ function bottleOptions(sel){
   return h;
 }
 
+/* ★v10.9b：①伝票入力は「打つだけ」の画面になった（2026-08-22 担当者さん要望）。
+   -------------------------------------------------------------------------
+   ★打ち終わった伝票の一覧はここに出さない。見る・直すは**⑦カレンダーからだけ**。
+     理由：①に一覧があると、打っている途中の人が過去の伝票を触ってしまう。
+     打つ画面と、見る・直す画面を分ける。
+   ★だから残っているのは「見出し」だけ。
+     「8月5日（水）　伝票 3 枚　総売上 ◯◯円」＝**その日に何枚打ったかの控え**。
+     一覧が無いぶん、この数字が「ちゃんと入っている」ことの唯一の手がかりになる。
+   ★関数名は renderSlipList のまま。renderSlip() から呼ばれている。 */
 function renderSlipList(){
-  const box = document.getElementById("slipList");
+  const head = document.getElementById("slipHead"); if(!head) return;
   const d = document.getElementById("slipDate").value;
-  const list = S.slips.filter(s=> !d || s.date===d).sort((a,b)=> (a.date+a.no).localeCompare(b.date+b.no));
-  if(!list.length){ box.innerHTML='<div class="muted">この日の伝票はまだありません。「＋ 新しい伝票」から打ってください。</div>'; return; }
-  box.innerHTML = list.map(s=>{
-    const a = accounting(s);
-    return '<div class="slip-item'+(s.id===S.ui.slipId?" on":"")+'" data-open="'+s.id+'">'
-      + '<div class="t"><b>'+(lockOfDate(s.date)?"🔒 ":"")+esc(s.date)+(s.no?" No."+esc(s.no):"")+'</b> '
-      + '<span class="muted">係:'+esc(kakariLabel(s))+' / '+esc(s.guests)+'名'
-      + (s.dohan?" / 同伴":"")+' / '+(s.pay==="card"?"カード":"現金")+'</span></div>'
-      + '<div class="amt"><b>'+yen(a.total)+'円</b><div class="muted">明細 '+yen(a.sub)+'</div></div></div>';
-  }).join("");
-  box.querySelectorAll("[data-open]").forEach(el=>el.onclick=()=>{ S.ui.slipId=el.dataset.open; save(); renderSlip(); });
+  const list = S.slips.filter(s=> !d || s.date===d);
+
+  let sales = 0; list.forEach(s=> sales += slipStoreSales(s));
+  const lockedAll = d ? !!lockOfDate(d) : (list.length>0 && list.every(s=> lockOfDate(s.date)));
+  head.innerHTML =
+    '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px">'
+    + '<b style="font-size:15px">'+(lockedAll?"🔒 ":"")+(d ? esc(dateLabelJP(d)) : "全期間")+'</b>'
+    + '<span style="font-size:14px">伝票 <b>'+list.length+'</b> 枚</span>'
+    + (list.length ? '<span class="muted" style="font-size:13px">総売上 <b>'+yen(sales)+'</b> 円'
+                     +'（'+(bonusConf().taxIncluded?"税込":"税抜")+'）</span>' : '')
+    + '</div>'
+    + (list.length
+        ? '<div class="muted" style="font-size:11px;margin-top:4px">'
+          + '打ち終わった伝票を見る・直すときは<b>⑦カレンダー</b>から開いてください。</div>'
+        : '');
+
+  /* ★下のボタン（入力完了・続けて新しい伝票）は、いま1枚ひらいているときだけ出す。
+     ★ v10.9 では「伝票が1枚以上あるか」で出していたが、それだと
+       エディタを閉じたあとにも「入力完了」が残ってしまい、何を完了するのか分からなくなる。 */
+  document.getElementById("slipListFoot").style.display = getSlip(S.ui.slipId) ? "" : "none";
 }
 
 function renderSlipEditor(){
@@ -2562,6 +2667,14 @@ const SHEET_COLS = [
   // ★v10.1：値引きの列は外した（2026-08-06 担当者さん指示）。紙には枠があるが使っていない
 ];
 const DOW = ["日","月","火","水","木","金","土"];
+
+/* ★v10.9：「2026-08-22」→「8月22日（金）」。①の見出しと⑦カレンダーの両方で使う。
+   ここ1箇所を直せば画面じゅうの日付の書き方が揃う。 */
+function dateLabelJP(d){
+  if(!d) return "";
+  const w = DOW[new Date(d+"T00:00:00").getDay()] || "";
+  return (+d.slice(5,7))+"月"+(+d.slice(8,10))+"日（"+w+"）";
+}
 
 // 1日ぶんの行データを作る（未確認の列は null のまま ＝ 空欄で出す）
 function sheetRow(name, date){
@@ -4447,14 +4560,261 @@ function KYABA_TEST(){
 window.KYABA_TEST = KYABA_TEST;
 
 /* =========================================================================
+   ⑦ カレンダー（★v10.9・2026-08-22 お店の要望③④）
+   -------------------------------------------------------------------------
+   ★この画面は「見るだけ」。金額を作る計算は1行も持っていない。
+     ・総売上 … slipStoreSales()（⑤設定の税込／税抜にそのまま従う）
+     ・人件費 … aggregate(d,d)（＝締めのロックがそのまま効く。締めた日は当時の額のまま）
+     ここで別に足し算を書き起こさないこと。書いた瞬間、
+     ④締め・給与の金額とカレンダーの金額が食い違う道ができる。
+   ★マスは全部押せる。伝票が無い日も選べないと「この日に打ちたい」で手が止まる。
+   ========================================================================= */
+
+/* 表示している月の、日ごとの {sales, count}。
+   ★マスを描くのに aggregate() は呼ばない（1か月ぶん＝31回呼ぶことになる）。
+     伝票そのものから数えれば足りる。人件費は「選んだ1日」だけ計算する。 */
+function calDayMap(ym){
+  const map = {};
+  (S.slips||[]).forEach(s=>{
+    if((s.date||"").slice(0,7)!==ym) return;
+    const x = map[s.date] = map[s.date] || {sales:0, count:0};
+    x.sales += slipStoreSales(s); x.count++;
+  });
+  return map;
+}
+
+function calSetMonth(ym){
+  if(!/^\d{4}-\d{2}$/.test(ym||"")) ym = todayStr().slice(0,7);
+  S.ui.calYm = ym;
+  document.getElementById("calYm").value = ym;
+  save(); renderCal();
+}
+/* 月を前後に動かす。12月→翌1月をまたげるように Date に計算させる */
+function calShiftMonth(diff){
+  const ym = S.ui.calYm || todayStr().slice(0,7);
+  const d  = new Date(+ym.slice(0,4), +ym.slice(5,7)-1+diff, 1);
+  calSetMonth(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
+}
+
+function renderCal(){
+  const grid = document.getElementById("calGrid"); if(!grid) return;
+  const el = document.getElementById("calYm");
+  let ym = el.value || S.ui.calYm || todayStr().slice(0,7);
+  if(!/^\d{4}-\d{2}$/.test(ym)) ym = todayStr().slice(0,7);
+  el.value = ym; S.ui.calYm = ym;
+
+  const y = +ym.slice(0,4), m = +ym.slice(5,7);
+  const days = new Date(y, m, 0).getDate();        // その月の日数（m は1始まりなので0日＝前月末＝当月の日数）
+  const pad  = new Date(y, m-1, 1).getDay();       // 1日が何曜から始まるか
+  const map  = calDayMap(ym);
+  const today = todayStr();
+
+  // --- 月の合計 ---
+  let sales=0, count=0, dayN=0;
+  Object.keys(map).forEach(k=>{ sales+=map[k].sales; count+=map[k].count; dayN++; });
+  document.getElementById("calSum").innerHTML =
+    '<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;margin-bottom:10px">'
+    + '<b style="font-size:15px">'+y+'年'+m+'月</b>'
+    + (count
+        ? '<span style="font-size:14px">総売上 <b style="color:var(--accent)">'+yen(sales)+'</b> 円'
+          +'<span class="muted" style="font-size:11px">（'+(bonusConf().taxIncluded?"税込":"税抜")+'）</span></span>'
+          +'<span class="muted" style="font-size:13px">伝票 <b>'+count+'</b> 枚 ／ 営業 <b>'+dayN+'</b> 日</span>'
+        : '<span class="muted" style="font-size:13px">この月の伝票はまだありません。</span>')
+    + '</div>';
+
+  // --- グリッド ---
+  let h = '<div class="cal-grid">';
+  DOW.forEach((w,i)=> h += '<div class="cal-dow'+(i===0?" sun":(i===6?" sat":""))+'">'+w+'</div>');
+  for(let i=0;i<pad;i++) h += '<div class="cal-cell pad"></div>';
+  for(let d=1; d<=days; d++){
+    const ds  = ym+"-"+String(d).padStart(2,"0");
+    const x   = map[ds];
+    const dow = new Date(ds+"T00:00:00").getDay();
+    const L   = lockOfDate(ds);
+    const cls = (x?" has":"") + (ds===today?" today":"") + (ds===S.ui.calDate?" on":"");
+    h += '<button type="button" class="cal-cell'+cls+'" data-cal="'+ds+'"'
+       + ' title="'+esc(dateLabelJP(ds))+(x?"　伝票"+x.count+"枚":"")+'">'
+       + '<span class="d'+(dow===0?" sun":(dow===6?" sat":""))+'">'+d+'</span>'
+       + (x ? '<span class="s">'+yen(x.sales)+'</span>'
+              +'<span class="n">'+(L?"🔒":"")+x.count+'枚</span>'
+            : (L ? '<span class="n">🔒</span>' : ''))
+       + '</button>';
+  }
+  h += '</div>';
+  grid.innerHTML = h;
+  grid.querySelectorAll("[data-cal]").forEach(b=> b.onclick = ()=>{
+    // 同じ日をもう一度押したら閉じる（開きっぱなしで下に伸び続けないように）
+    S.ui.calDate = (S.ui.calDate===b.dataset.cal) ? "" : b.dataset.cal;
+    save(); renderCal();
+  });
+
+  renderCalDetail();
+}
+
+/* ★v10.9b：伝票1枚を「紙の伝票の形」のカードにする（2026-08-22 担当者さん要望）。
+   -------------------------------------------------------------------------
+   ★明細をここで作り直さない。金額は伝票入力の画面とまったく同じ関数から取る
+     （lineSet / lineBottle / lineDrink / lineOther / accounting）。
+     ここで独自に掛け算を書くと、①の画面とカードで額が食い違う道ができる。
+   ★①に伝票一覧が無くなったので、**このカードが「打った内容を見る唯一の場所」**。
+     だから会計だけでなく明細まで出す。 */
+function slipCardHTML(sp){
+  const a = accounting(sp);
+  const L = lockOfDate(sp.date);
+  const ln  = (nm,yn,minus)=> '<div class="ln'+(minus?" minus":"")+'">'
+      + '<span class="nm">'+esc(nm)+'</span><span class="yn">'+yen(yn)+'</span></div>';
+  const grp = t => '<div class="grp">'+esc(t)+'</div>';
+
+  let b = "";
+  const sets = (sp.sets||[]).filter(l=> +l.qty);
+  if(sets.length){ b += grp("セット");
+    sets.forEach(l=> b += ln(l.kind+" ×"+l.qty, lineSet(l))); }
+
+  const bots = (sp.bottles||[]).filter(l=> l.name && +l.qty);
+  if(bots.length){ b += grp("ボトル");
+    bots.forEach(l=> b += ln(l.name+" ×"+l.qty, lineBottle(l))); }
+
+  const drs = (sp.drinks||[]).filter(l=> +l.qty);
+  if(drs.length){ b += grp("キャストドリンク");
+    drs.forEach(l=> b += ln((l.cast||"（誰か未選択）")+" ×"+l.qty, lineDrink(l))); }
+
+  const oth = (sp.others||[]).filter(l=> l.name && +l.qty);
+  if(oth.length){ b += grp("その他");
+    oth.forEach(l=> b += ln(l.name+(l.cast?"（"+l.cast+"）":"")+" ×"+l.qty, lineOther(l))); }
+
+  const adj = (sp.adjusts||[]).filter(l=> +l.amount);
+  if(adj.length){ b += grp("調整");
+    adj.forEach(l=> b += ln(l.label||"調整", +l.amount, (+l.amount)<0)); }
+
+  if(!b) b = '<div class="muted">明細はまだありません。</div>';
+
+  return '<div class="slip-card'+(L?" locked":"")+'">'
+    + '<div class="hd">'
+      + '<span class="no">'+(L?"🔒 ":"")+esc(sp.date.slice(5).replace("-","/"))
+      +   (sp.no? '　No.'+esc(sp.no) : '')+'</span>'
+      + '<span class="sub">係:'+esc(kakariLabel(sp))+' / '+esc(sp.guests)+'名'
+      +   (sp.dohan?" / 同伴":"")+' / '+(sp.pay==="card"?"カード":"現金")+'</span>'
+    + '</div>'
+    + '<div class="bd">'+b+'</div>'
+    + '<div class="ft"><span class="tt">'+yen(a.total)+' 円</span>'
+      + (L ? '<span class="muted" style="font-size:11px">締め済み</span>'
+           : '<button class="btn mini" data-fix="'+esc(sp.id)+'">直す</button>')
+    + '</div></div>';
+}
+
+/* 選んだ日の中身：総売上・伝票のカード・人件費 */
+function renderCalDetail(){
+  const box = document.getElementById("calDetail"); if(!box) return;
+  const d = S.ui.calDate || "";
+  // 月を動かしたら閉じる（見えていない日の詳細が下に残らないように）
+  if(!d || d.slice(0,7)!==S.ui.calYm){ box.innerHTML=""; return; }
+
+  const list = (S.slips||[]).filter(s=> s.date===d)
+                 .sort((a,b)=> (a.no||"").localeCompare(b.no||""));
+  let sales = 0; list.forEach(s=> sales += slipStoreSales(s));
+
+  /* ★人件費は aggregate(d,d)。締め済みの日は「締めたときの設定」で計算される。
+     ここで hour+back を自分で足し直さないこと──日当は「その日ごとに丸めて」払うので、
+     丸めた後の pay と、内訳を足した額は一致しないことがある（それで正しい）。 */
+  const R = aggregate(d, d);
+  const rows = Object.keys(R.casts).map(k=>R.casts[k])
+                 .filter(c=> c.pay>0 || c.min>0)
+                 .sort((a,b)=> b.pay-a.pay);
+  const jinken = rows.reduce((t,c)=> t+c.pay, 0);
+  const L = lockOfDate(d);
+
+  let h = '<div class="card">';
+  h += '<h2><span class="ttl">'+(L?"🔒 ":"")+esc(dateLabelJP(d))+'</span>'
+     + '<span class="note">'+(L? esc(L.label)+" は締め済みです（金額は締めたときのまま）" : "")+'</span>'
+     + '<button class="btn pri mini" id="btnCalGoSlip">＋ 伝票を追加</button></h2>';
+
+  // --- 3つの数字 ---
+  h += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+     + '<div class="blk" style="flex:1 1 150px;margin:0;padding:9px 11px">'
+       + '<div class="muted" style="font-size:11px">総売上（'+(bonusConf().taxIncluded?"税込":"税抜")+'）</div>'
+       + '<div style="font-size:17px;font-weight:700;color:var(--accent)">'+yen(sales)+' 円</div></div>'
+     + '<div class="blk" style="flex:1 1 110px;margin:0;padding:9px 11px">'
+       + '<div class="muted" style="font-size:11px">伝票</div>'
+       + '<div style="font-size:17px;font-weight:700">'+list.length+' 枚</div></div>'
+     + '<div class="blk" style="flex:1 1 150px;margin:0;padding:9px 11px">'
+       + '<div class="muted" style="font-size:11px">人件費（この日の日当の合計）</div>'
+       + '<div style="font-size:17px;font-weight:700">'+yen(jinken)+' 円</div></div>'
+     + '</div>';
+
+  /* --- 伝票（★v10.9b：紙の伝票の形のカードで、横に4枚ずつ） ---
+     ★①に伝票一覧が無くなったので、ここが「打った内容を見る唯一の場所」。
+       だから会計だけでなく**明細まで**出す。 */
+  h += '<div class="blk"><h3>伝票 <span class="muted" style="font-weight:400;font-size:11px">'
+     + '中身はこのまま読めます。直すときは各伝票の「直す」から</span></h3>';
+  if(!list.length){
+    h += '<div class="muted">この日の伝票はまだありません。</div>';
+  }else{
+    h += '<div class="slip-cards">' + list.map(slipCardHTML).join("") + '</div>';
+  }
+  h += '</div>';
+
+  // --- 人件費の内訳 ---
+  h += '<div class="blk"><h3>人件費の内訳</h3>';
+  if(!rows.length){
+    h += '<div class="muted">この日の出勤・バックはまだありません。'
+       + '（時給分は②出勤時間タブに出勤・退勤を入れると出ます）</div>';
+  }else{
+    h += '<table><thead><tr><th style="text-align:left">キャスト</th><th class="amt">時給分</th>'
+       + '<th class="amt">バック</th><th class="amt">ボーナス</th><th class="amt">日当</th></tr></thead><tbody>';
+    rows.forEach(c=>{
+      h += '<tr><td>'+esc(c.name)+'</td>'
+         + '<td class="amt">'+yen(c.hour)+'</td>'
+         + '<td class="amt">'+yen(c.back)+'</td>'
+         + '<td class="amt">'+(c.bonus?yen(c.bonus):'<span class="muted">—</span>')+'</td>'
+         + '<td class="amt"><b>'+yen(c.pay)+'</b></td></tr>';
+    });
+    h += '<tr><td><b>合計</b></td><td class="amt"></td><td class="amt"></td><td class="amt"></td>'
+       + '<td class="amt"><b>'+yen(jinken)+'</b></td></tr>';
+    h += '</tbody></table>';
+    h += '<div class="muted" style="font-size:11px;margin-top:6px">'
+       + '※日当は'+yen(roundUnit())+'円未満を'+roundModeLabel()+'ています（その日ごと）。'
+       + '内訳を足した額と1円単位で違うことがありますが、実際に払うのは「日当」の額です。</div>';
+  }
+  h += '</div></div>';
+
+  box.innerHTML = h;
+
+  /* ★v10.9b：「＋ 伝票を追加」（2026-08-22 担当者さん要望でこの名前に）。
+     ★★このボタンの役目は「**足す**」だけ。押すとその日の**新しい伝票**が開く。
+       既にある伝票を開き直す道はここではない。**編集はあくまで各カードの「直す」から**。
+       ラベルを「この日の伝票を打つ →」にしていたときは、
+       前に開いていた伝票がそのまま出て「追加なのか編集なのか」が読めなかった。
+     newSlipClick() を通すので、締め済みの日なら🔒で止まる（判定を二重に書かない）。 */
+  document.getElementById("btnCalGoSlip").onclick = ()=>{
+    document.getElementById("slipDate").value = d;
+    S.ui.slipId = "";                      // ★前の伝票を必ず手放してから
+    gotoTab("slip"); renderSlip();
+    newSlipClick();
+  };
+  /* ★「直す」＝カレンダーを経由してだけ編集に入れる道（2026-08-22 担当者さん要望）。
+     締め済みの伝票にはそもそもボタンを出していない。 */
+  box.querySelectorAll("[data-fix]").forEach(b=> b.onclick = ()=>{
+    document.getElementById("slipDate").value = d;
+    S.ui.slipId = b.dataset.fix; save();
+    gotoTab("slip"); renderSlip();
+    document.getElementById("slipEditor").scrollIntoView({behavior:"smooth",block:"start"});
+  });
+}
+
+/* =========================================================================
    起動
    ========================================================================= */
-function renderAll(){ renderSlip(); renderAtt(); renderCost(); renderPay(); renderSet(); }
+function renderAll(){ renderSlip(); renderAtt(); renderCost(); renderPay(); renderSet(); renderCal(); }
 
+/* ★v10.9：タブ切り替えを関数にした。⑦カレンダーの「この日の伝票を打つ →」から
+   ①タブへ飛ぶのに要る。★nav のクリックもこの関数を通す（2通りの切り替え方を作らない）。 */
+function gotoTab(t){
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on", x.dataset.t===t));
+  document.querySelectorAll("main section").forEach(s=>s.classList.toggle("on", s.id==="s-"+t));
+}
 document.getElementById("nav").addEventListener("click",e=>{
   const b=e.target.closest("button[data-t]"); if(!b) return;
-  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("on",x===b));
-  document.querySelectorAll("main section").forEach(s=>s.classList.toggle("on", s.id==="s-"+b.dataset.t));
+  gotoTab(b.dataset.t);
   renderAll();
 });
 
@@ -4465,6 +4825,11 @@ const t = todayStr();
    お店は「その日のうちに数字を確定させる」運用なので、既定は今日が素直
    （①伝票・②出勤と同じ）。広げたいときは日付を変えるか「全期間」を押す。 */
 ["slipDate","attDate","payFrom","payTo","costFrom","costTo"].forEach(id=>document.getElementById(id).value=t);
+/* ★v10.9⑦：前に見ていた月を覚えて、その月で開く（S.ui.calYm）。
+   ★選んでいた日（S.ui.calDate）はわざと引き継がない。
+     日をまたいで開き直したとき、古い日の詳細が開きっぱなしで出るのは事故のもと。 */
+document.getElementById("calYm").value = (/^\d{4}-\d{2}$/.test(S.ui.calYm||"") ? S.ui.calYm : t.slice(0,7));
+S.ui.calDate = "";
 document.getElementById("payMonth").value = t.slice(0,7);
 document.getElementById("payHalf").value  = (+t.slice(8,10) <= 15) ? "first" : "second";
 document.getElementById("slipDate").addEventListener("change",renderSlip);
@@ -4472,7 +4837,10 @@ document.getElementById("attDate").addEventListener("change",renderAtt);
 ["costFrom","costTo"].forEach(id=>document.getElementById(id).addEventListener("change",renderCost));
 ["payFrom","payTo"].forEach(id=>document.getElementById(id).addEventListener("change",renderPay));
 
-document.getElementById("btnNewSlip").onclick=()=>{
+/* ★v10.9②：「＋ 新しい伝票」の中身を関数にした（お店の要望②・2026-08-22）。
+   上と一番下の2箇所から呼ぶ。★処理をコピーして2つ書かないこと──
+   締め済みチェックが片方だけ古くなると、🔒の日に伝票が打ててしまう。 */
+function newSlipClick(){
   /* ★v10.7：締め済みの日には新しい伝票を作れない */
   {
     const d = document.getElementById("slipDate").value||todayStr();
@@ -4484,8 +4852,45 @@ document.getElementById("btnNewSlip").onclick=()=>{
   sp.sets.push({kind:SET_KINDS[0].name,qty:1});
   S.slips.push(sp); S.ui.slipId=sp.id; save(); renderSlip();
   document.getElementById("slipEditor").scrollIntoView({behavior:"smooth",block:"start"});
+}
+document.getElementById("btnNewSlip").onclick  = newSlipClick;
+document.getElementById("btnNewSlip2").onclick = newSlipClick;
+
+/* ★v10.9b：「✓ 入力完了」（2026-08-22 担当者さん要望）
+   -------------------------------------------------------------------------
+   ★★これは保存ボタンではない。「閉じる」ボタン。
+     欄を1文字打つたびに save() が走っていて、保存はとっくに済んでいる
+     （配線は renderSlipEditor の [data-p] のところ。テキスト欄は input、選択欄は change）。
+   ★だから押しても伝票は消えない。消えるのは「いまどれを開いているか」（S.ui.slipId）だけ。
+     2026-08-22に担当者さんから「打った内容が消えないか」と確認があり、
+     実機で打つ→完了→開き直しを通して**残ることを確かめてある**（実装メモ21章）。
+   ★押した人が「保存されずに消えた」と思わないよう、**必ず控えの文を出す**。
+     ここを省くと、画面から伝票が消えるだけの操作に見える。 */
+document.getElementById("btnSlipDone").onclick = ()=>{
+  const sp = getSlip(S.ui.slipId);
+  if(!sp) return;
+  const label = dateLabelJP(sp.date) + (sp.no ? "　No."+sp.no : "");
+  const gaku  = yen(accounting(sp).total);
+  const mai   = S.slips.filter(x=> x.date===sp.date).length;
+  S.ui.slipId = ""; save(); renderSlip();
+  /* ★エディタがあった場所に控えを出す。次に何か描き直されたら消える一時的な文でよい */
+  document.getElementById("slipEditor").innerHTML =
+    '<div class="card"><div class="msg ok" style="margin:0">'
+    + '<b>✓ ' + esc(label) + '　お会計 ' + gaku + '円　を保存しました。</b><br>'
+    + 'この日はこれで <b>' + mai + '</b> 枚です。'
+    + '見る・直すときは <b>⑦カレンダー</b> から開いてください。'
+    + '</div></div>';
+  document.getElementById("slipHead").scrollIntoView({behavior:"smooth",block:"start"});
 };
-document.getElementById("btnAllSlips").onclick=()=>{ document.getElementById("slipDate").value=""; renderSlip(); };
+/* ★v10.9：「全部の日を表示」ボタンは廃止（2026-08-22 担当者さん判断）。
+   押すと日付欄が黙って空になるだけで、何が起きたのか分からなかった。
+   過去の伝票を見渡す役は⑦カレンダーが引き受ける。
+   ★renderSlipList の「日付が空なら全件」の分岐は残してある（⑦から日を渡す道のため）。 */
+/* ★v10.9⑦ カレンダーの月送り */
+document.getElementById("btnCalPrev").onclick  = ()=> calShiftMonth(-1);
+document.getElementById("btnCalNext").onclick  = ()=> calShiftMonth(+1);
+document.getElementById("btnCalToday").onclick = ()=> calSetMonth(todayStr().slice(0,7));
+document.getElementById("calYm").addEventListener("change", ()=> calSetMonth(document.getElementById("calYm").value));
 document.getElementById("btnCostAll").onclick=()=>{ ["costFrom","costTo"].forEach(id=>document.getElementById(id).value=""); renderCost(); };
 document.getElementById("btnPayHalf").onclick=()=>{
   const r = halfRange(document.getElementById("payMonth").value, document.getElementById("payHalf").value);
@@ -4495,7 +4900,16 @@ document.getElementById("btnPayHalf").onclick=()=>{
   renderPay();
 };
 document.getElementById("btnPayToday").onclick=()=>{ ["payFrom","payTo"].forEach(id=>document.getElementById(id).value=todayStr()); renderPay(); };
-document.getElementById("btnPayAll").onclick=()=>{ ["payFrom","payTo"].forEach(id=>document.getElementById(id).value=""); renderPay(); };
+/* ★v10.9：④の「全期間」ボタンは廃止（2026-08-22 担当者さん判断）。
+   ★★消した理由は「分かりにくいから」ではなく「間違った金額が出るから」。
+     期間を空にすると lockFor() が null を返す（1つの締めに収まらないので当然）。
+     → 締め済みの期間まで aggregateLive で計算し直され、
+       **締めて渡した額と違う額が画面に出る**（実測：11,000円 → 18,500円）。
+     lockBox に「控えを使っていません」の注記は出ていたが、金額だけ見ると気づけない。
+   ★renderPay の「日付が空なら全件」の分岐は残してある（内部で使う道）。
+     ボタンを消しただけで、機能そのものは残っている。
+   ★★ここにボタンを戻さないこと。戻すなら先に、
+     「全期間の中に締め済みの日が入っていたら赤で知らせる」を作ること。 */
 function addCast(inputId){
   const el=document.getElementById(inputId), v=el.value.trim();
   if(!v) return;
