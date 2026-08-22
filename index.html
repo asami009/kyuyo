@@ -5040,8 +5040,16 @@ document.getElementById("btnSample").onclick=()=>{
   document.getElementById("slipDate").value="2026-07-30";
   ["attDate"].forEach(id=>document.getElementById(id).value="2026-07-30");
   ["payFrom","payTo"].forEach(id=>document.getElementById(id).value="2026-07-30");
+  /* ★v10.9b：⑦カレンダーもサンプルの月・日に合わせる。
+     ★①は「打つだけ」の画面になり伝票一覧が無いので、読み込んでも①では何も見えない。
+       しかもサンプルは2026-07-30なので、カレンダーを今月のまま開いても見つからない。
+       **読み込んだ人が迷子になる**ため、見える場所まで連れていく。 */
+  S.ui.calYm = "2026-07"; S.ui.calDate = "2026-07-30";
+  document.getElementById("calYm").value = "2026-07";
   save(); renderAll();
-  alert("サンプル伝票2枚と出勤時間を読み込みました。①伝票入力と④締め・給与を見てください。");
+  alert("サンプル伝票2枚と出勤時間を読み込みました。\n\n"
+      + "⑦カレンダー（2026年7月30日）で中身を、④締め・給与で金額を見てください。\n"
+      + "消したいときは、⑦カレンダーで7月30日を押して、伝票カードの「直す」から削除できます。");
 };
 
 wireMasterButtons();
