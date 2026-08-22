@@ -311,7 +311,7 @@ table.box td.num{text-align:right}
     <div class="row"><div class="wide"><input id="storeName" placeholder="例：〇〇（店名）"></div></div>
   </div>
   <div class="card">
-    <h2>キャスト登録</h2>
+    <h2>キャスト登録 <span class="note">名前と時給。時給は一覧の欄に入れます</span></h2>
     <div class="row">
       <div class="wide"><label>名前（伝票に書かれる呼び名のまま）</label><input id="newCast" placeholder="例：Aさん"></div>
       <div style="flex:0 0 auto"><button class="btn pri" id="btnAddCast">追加</button></div>
@@ -927,7 +927,12 @@ function workMinutesRaw(inT,outT){
   let d=b-a; if(d<0) d+=24*60; return d;
 }
 const floor30 = m => Math.floor(m/30)*30;
-const hourPay = m => Math.round(RATE.hour * floor30(m) / 60);   // 1,500円/時 = 25円/分
+/* ★v10.8：時給はキャストごと（2026-08-22 担当者さん確定）
+   ・第2引数（キャスト名）を省くと基本時給（RATE.hour＝1,500円）で計算する。
+     昔からの呼び出し・検算はそのまま通る。
+   ・締め済みの期間は confHour() が控え（LOCK_CONF.wages）を読むので、
+     ⑤設定で時給を直しても過去の給料は1円も動かない。 */
+const hourPay = (m, cast) => Math.round(confHour(cast) * floor30(m) / 60);   // 25円/分（1,500円/時のとき）
 function hhmm(m){ return Math.floor(m/60)+"時間"+String(m%60).padStart(2,"0")+"分"; }
 
 /* ---------- 状態 ---------- */
@@ -936,7 +941,7 @@ let S = load();
 syncMaster();
 function blank(){ return {casts:["ママ"], slips:[], att:{}, costs:{}, store:{name:""}, ui:{},
                           bonus:defaultBonus(), round:defaultRound(), master:defaultMaster(),
-                          locks:{}, lockLog:[]}; }
+                          locks:{}, lockLog:[], wages:{}}; }
 /* ★v10.3：ママの売上ボーナス（総売上ラダー）の設定（2026-08-16）
    ・単価マスタ（S.master）の中ではなく S の直下に置いている。
      ⑤設定の「単価マスタを最初の状態に戻す」を押したときに、
@@ -1056,6 +1061,35 @@ function lockAtLabel(L){
 }
 
 /* --- 控えの設定を読む入口。ロック中はここが控えを返す --- */
+
+/* ★v10.8：キャストごとの時給（2026-08-22 担当者さん確定）
+   ・形は S.wages = { "ママ":{yen:1500}, "Aさん":{yen:1800} }。
+     ★数値を直に持たせず**オブジェクト**にしてある。あとで「◯月◯日から1,800円」の
+       日付指定を足すとき、{yen, hist:[{from,yen}]} とキーを足すだけで済むようにするため
+       （担当者さんの選択：「とりあえず締め単位、あとで日付を足せるように」）。
+   ・名前が無い／空欄／数字でないときは基本時給（RATE.hour）に落とす。
+     ★ここが0円を返すと、その人の給料が黙って時給分だけ減る。絶対に0を返さない。 */
+function wagesConf(){
+  if(LOCK_CONF && LOCK_CONF.wages) return LOCK_CONF.wages;
+  return (typeof S!=="undefined" && S && S.wages) ? S.wages : {};
+}
+function confHour(cast){
+  if(!cast) return RATE.hour;
+  const w = wagesConf()[cast];
+  if(!w || typeof w!=="object" || w.yen==null || w.yen==="") return RATE.hour;
+  const n = Math.round(+w.yen);
+  return (isFinite(n) && n>=0) ? n : RATE.hour;
+}
+/* キャストを登録したときに時給の欄を作る。★入れ忘れても基本時給で動くが、
+   ⑤設定の一覧に数字が出ていないと「入れ忘れ」に気づけないので必ず埋める。 */
+function ensureWage(name){
+  if(!name) return;
+  S.wages = S.wages || {};
+  const w = S.wages[name];
+  if(!w || typeof w!=="object")      S.wages[name] = {yen:RATE.hour};
+  else if(w.yen==null || w.yen==="") w.yen = RATE.hour;
+}
+
 function confCosts(){
   return (LOCK_CONF && LOCK_CONF.costs) ? LOCK_CONF.costs : ((typeof S!=="undefined" && S && S.costs) || {});
 }
@@ -1070,8 +1104,8 @@ function confFixedCost(name){
 }
 
 /* 締めるときに控える設定のかたまり。
-   ★ここに入れ忘れたものは「締めたあとから動く」ままになる。
-     設定を足したら（例：時給を⑤設定で変えられるようにしたら）ここにも足すこと。 */
+   ★ここに入れ忘れたものは「締めたあとから動く」ままになる。設定を足したらここにも足すこと。
+   ★v10.8：キャスト別時給（wages）を追加。この宿題はここに書いてあったもの。 */
 function snapConf(){
   const fx = {};
   ((S.master&&S.master.bottles)||[]).forEach(b=>{
@@ -1081,6 +1115,7 @@ function snapConf(){
     costs:     deepCopy(S.costs || {}),
     round:     deepCopy(S.round || defaultRound()),
     bonus:     deepCopy(S.bonus || defaultBonus()),
+    wages:     deepCopy(S.wages || {}),      // ★v10.8 キャスト別時給
     fixedCost: fx
   };
 }
@@ -1241,6 +1276,16 @@ function migrate(o){
      （＝何も締まっていない状態。金額はいままでと1円も変わらない）。 */
   if(!o.locks || typeof o.locks!=="object") o.locks = {};
   if(!Array.isArray(o.lockLog))             o.lockLog = [];
+  /* ★v10.8：キャスト別時給。v10.7以前のデータには無いので、
+     いま登録されているキャストを**全員そろって基本時給（1,500円）で埋める**。
+     ＝開いた瞬間の金額は、いままでと1円も変わらない（担当者さんの選択）。
+     ★空のままにすると「入れ忘れて0円」が起きるので、必ず数字が入った状態で始める。 */
+  if(!o.wages || typeof o.wages!=="object") o.wages = {};
+  (o.casts||[]).forEach(c=>{
+    const w = o.wages[c];
+    if(!w || typeof w!=="object")      o.wages[c] = {yen:RATE.hour};
+    else if(w.yen==null || w.yen==="") w.yen = RATE.hour;
+  });
   // v8以前のデータには master が無い。初期値を入れる（＝今までと同じ内容になる）
   if(!o.master || typeof o.master!=="object") o.master = defaultMaster();
   const m = o.master;
@@ -1645,8 +1690,8 @@ function aggregateLive(from,to){
       const r = day[name]; if(!r||!r.in||!r.out) return;
       const m = workMinutesRaw(r.in,r.out);
       if(m<=0) return;
-      const c = g(name); c.min += m; c.minPaid += floor30(m); c.hour += hourPay(m);
-      bd(c,d).hour += hourPay(m);
+      const c = g(name); c.min += m; c.minPaid += floor30(m); c.hour += hourPay(m,name);
+      bd(c,d).hour += hourPay(m,name);
     });
   });
 
@@ -2111,7 +2156,7 @@ function renderAtt(){
   box.innerHTML = names.map(name=>{
     const r = day[name] || {in:"",out:""};
     const m = workMinutesRaw(r.in,r.out), f = floor30(m);
-    const info = m ? hhmm(m)+" → <b>"+hhmm(f)+"</b> ＝ "+yen(hourPay(m))+"円" : '<span class="muted">—</span>';
+    const info = m ? hhmm(m)+" → <b>"+hhmm(f)+"</b> ＝ "+yen(hourPay(m,name))+"円" : '<span class="muted">—</span>';
     const byHand = !fromSlips.includes(name);      // 伝票に出ていない＝手で足した人
     return '<div class="grid-line gl-att">'
       +'<div data-l="キャスト" style="align-self:center;font-weight:600">'+esc(name)
@@ -2609,7 +2654,9 @@ function sheetHTML(name, from, to){
       if(c.k==="dow") return '<td>曜日</td>';
       if(c.k==="attend") return '<td>'+T.attend+'</td>';
       // keep のように率で持つ列は小数のまま出す（紙も「0.2」と書かれている）
-      return '<td>'+(c.rate==null ? "" : (c.rate<1 ? c.rate : yen(c.rate)))+'</td>';
+      // ★v10.8：時給はキャストごとなので、この人の時給を出す（一律1,500円ではない）
+      const rt = (c.k==="hours") ? confHour(name) : c.rate;
+      return '<td>'+(rt==null ? "" : (rt<1 ? rt : yen(rt)))+'</td>';
     }).join("")+'</tr>';
 
   const half = (from&&to) ? (from.slice(8,10)==="01" ? "前期" : "後期") : "";
@@ -2717,7 +2764,7 @@ function sheetHTML(name, from, to){
     + keepNote
     +'※<b>個人売上・対比は「※確認中」です。</b>数え方をお店に確認中のため、参考値として見てください'
     +'（<b>日当＝お給料の金額には影響しません</b>）。<br>'
-    +'※「無」の1列目は勤務時間（×'+yen(RATE.hour)+'円）。30分単位で切り捨て。<br>'
+    +'※「無」の1列目は勤務時間（×'+yen(confHour(name))+'円＝この人の時給）。30分単位で切り捨て。<br>'
     +'※D＝キャストドリンクとテキーラの合計杯数（×'+yen(RATE.drink)+'円）。'
     +'<b>テキーラは1杯をドリンク'+TEQUILA_AS_DRINKS+'杯として数えます</b>（バックが'+yen(RATE.tequila)+'円のため）。<br>'
     +'※keep＝ボトルの「売値−原価」。その'+Math.round(RATE.bottle*100)+'％がバック。<br>'
@@ -2794,6 +2841,13 @@ function wireMasterField(el, apply){
   el.addEventListener("change",()=>{ apply(el.value); saveMaster(); });
 }
 const BOTTLE_CATS = ["シャンパン","ウイスキー","ブランデー","焼酎ほか"];
+/* ★v10.8：⑤設定の時給欄に出す値。控え（ロック）ではなく**いまの設定**を出す。
+   欄は「これから先の給料に効く数字」を編集する場所なので、
+   締め済みの期間の控えを出すと直せない数字を見せることになる。 */
+function wageInputValue(name){
+  const w = (S.wages||{})[name];
+  return (w && w.yen!=null && w.yen!=="") ? w.yen : RATE.hour;
+}
 function bottleCats(){
   const s = BOTTLE_CATS.slice();
   BOTTLES.forEach(b=>{ if(b.cat && !s.includes(b.cat)) s.push(b.cat); });
@@ -2811,14 +2865,36 @@ function renderSet(){
 
   /* ---------- キャスト ---------- */
   const box=document.getElementById("castList");
+  /* ★v10.8：名前の隣に時給の欄を出す（2026-08-22 担当者さん確定：全員ぶん、ひとりずつ）
+     ・空にすると基本時給 1,500円 で計算される（0円にはならない）
+     ・締め済みの期間はここを直しても動かない（締めたときの時給で固定されている） */
   box.innerHTML = S.casts.length
     ? S.casts.map((c,i)=>'<div class="slip-item"><div class="t"><b>'+esc(c)+'</b>'
         +(castUseCount(c)?'<div class="muted" style="font-size:11px">記録 '+castUseCount(c)+' か所</div>':'')
         +'</div>'
+        +'<div data-l="時給" style="flex:0 0 auto;display:flex;align-items:center;gap:5px">'
+        +'<input type="text" inputmode="numeric" data-num="1" data-wage="'+esc(c)+'" '
+        +'style="max-width:96px;text-align:right" placeholder="'+yen(RATE.hour)+'" '
+        +'value="'+esc(wageInputValue(c))+'">'
+        +'<span class="muted" style="font-size:11px;white-space:nowrap">円/時</span></div>'
         +'<div><button class="btn mini" data-up="'+i+'">↑</button> '
         +'<button class="btn mini" data-rncast="'+i+'">名前を直す</button> '
         +'<button class="btn mini del" data-rmcast="'+i+'">削除</button></div></div>').join("")
     : '<div class="muted">キャストが未登録です。</div>';
+  /* 時給欄の配線。★数字は change（欄から離れたとき）にだけ確定する。
+     input のたびに保存すると「1800 を消して 1 まで打った所」で時給1円が保存される
+     （単価欄で同じ罠を一度踏んでいる。wireMasterField のコメント参照）。 */
+  box.querySelectorAll("[data-wage]").forEach(el=>{
+    wireNum(el);
+    el.addEventListener("change",()=>{
+      const name = el.dataset.wage;
+      const v = String(el.value==null?"":el.value).trim();
+      S.wages = S.wages || {};
+      S.wages[name] = S.wages[name] || {};
+      S.wages[name].yen = (v==="") ? RATE.hour : Math.max(0, Math.round(+v)||0);
+      save(); renderAll();
+    });
+  });
   box.querySelectorAll("[data-rmcast]").forEach(el=>el.onclick=()=>{
     const n=S.casts[+el.dataset.rmcast];
     if(!confirm("「"+n+"」を削除します。打った伝票の記録は残ります。よろしいですか？")) return;
@@ -2843,6 +2919,13 @@ function renderSet(){
     const name=v.trim();
     if(!name || name===old) return;
     if(S.casts.includes(name)){ alert("「"+name+"」は既に登録されています。"); return; }
+    /* ★v10.8：時給を新しい名前へ**写す**。写さないと基本時給に落ちて、
+       源氏名を直しただけで給料が黙って変わる。
+       ★古い名前の時給は消さない。過去の伝票・出勤は古い名前のまま残る仕様なので、
+         締め直したときにその人の時給で計算されなくなってしまう。 */
+    S.wages = S.wages || {};
+    if(S.wages[old] && !S.wages[name]) S.wages[name] = deepCopy(S.wages[old]);
+    ensureWage(name);
     S.casts[i]=name; save(); renderAll();
   });
 
@@ -2982,7 +3065,8 @@ function renderSet(){
     +' / ウイスキー '+BOTTLES.filter(b=>b.cat==="ウイスキー").length
     +' / ブランデー '+BOTTLES.filter(b=>b.cat==="ブランデー").length
     +' / 焼酎ほか '+BOTTLES.filter(b=>b.cat==="焼酎ほか").length+'）<br>'
-    +'誘客 '+yen(RATE.yuukyaku)+'円/人　同伴 '+yen(RATE.dohan)+'円/件　ボトル (売値−原価)×20%　時給 '+yen(RATE.hour)+'円（30分単位・切捨）';
+    +'誘客 '+yen(RATE.yuukyaku)+'円/人　同伴 '+yen(RATE.dohan)+'円/件　ボトル (売値−原価)×20%　'
+    +'時給 <b>キャストごと</b>（上の「キャスト登録」で入れる・30分単位・切捨）';
 }
 
 /* =========================================================================
@@ -3245,7 +3329,8 @@ function KYABA_TEST(){
     // ★v10.3：bonus も入れておく（段は空なので、ボーナスは1円も付かない＝他の章の期待値は動かない）
     S={casts,slips,att:att||{},costs:costs||{},ui:{},
        bonus:defaultBonus(), round:defaultRound(), master:defaultMaster(),
-       locks:{}, lockLog:[]};   // ★v10.7：何も締まっていない状態から始める
+       locks:{}, lockLog:[],    // ★v10.7：何も締まっていない状態から始める
+       wages:{}};               // ★v10.8：時給は空＝全員が基本時給1,500円（27章で入れる）
     syncMaster();
   };
   /* ★v10.4：オリシャンの原価はHTMLから抜いた（このファイルをネットに置くため → 14章）。
@@ -4226,6 +4311,125 @@ function KYABA_TEST(){
       T(["ママ"],[]);
     }
 
+    out.push("");
+    out.push("── 27. ★キャスト別時給（v10.8：2026-08-22 担当者さん確定「全員ぶん、ひとりずつ」） ──");
+    {
+      /* 時給を⑤設定で人ごとに変えられるようにした章。
+         ★この機能の危ないところは「⑤設定を直すと、締めて振り込んだ期間の時給まで
+           さかのぼって変わる」こと。v10.7のロックに乗せて止めている。
+           ★だから下の「締めたあと」の検査は、必ず aggregateLive（動く側）と並べて見る。
+             片方だけ通っても、ロックが効いているのか計算式が死んでいるのか区別できない。 */
+      const F="2026-08-01", To="2026-08-15";
+      // ママ・Aさんが同じ日に同じだけ出勤する（20:00→1:00 ＝ 5時間ちょうど）
+      const ATT = {"2026-08-05":{"ママ":{in:"20:00", out:"1:00"},
+                                 "Aさん":{in:"20:00", out:"1:00"}}};
+      const setW = (mama, a) => {
+        T(["ママ","Aさん"], [], ATT, {});
+        S.wages = {};
+        if(mama!==undefined) S.wages["ママ"]  = {yen:mama};
+        if(a   !==undefined) S.wages["Aさん"] = {yen:a};
+      };
+
+      out.push("  ・基本の読み口（confHour）");
+      setW(1500, 2000);
+      eq("ママは1,500円",            confHour("ママ"), 1500);
+      eq("Aさんは2,000円",           confHour("Aさん"), 2000);
+      eq("★登録の無い人は基本時給",   confHour("Bさん"), RATE.hour);
+      eq("★名前が空でも基本時給",     confHour(""), RATE.hour);
+      setW(1500, "");
+      eq("★欄が空なら基本時給（0円にしない）", confHour("Aさん"), RATE.hour);
+      setW(1500, undefined);
+      eq("★丸ごと無くても基本時給",   confHour("Aさん"), RATE.hour);
+      setW(1500, 0);
+      eq("0を入れたときだけ0円（「時給なし」の意味）", confHour("Aさん"), 0);
+
+      out.push("  ・給料が人ごとに変わる（同じ5時間でも額が違う）");
+      setW(1500, 2000);
+      eq("ママ 5時間 ＝ 7,500円",   aggregate(F,To).casts["ママ"].hour,  7500);
+      eq("★Aさん 5時間 ＝ 10,000円", aggregate(F,To).casts["Aさん"].hour, 10000);
+      eq("日ごとの箱にも人ごとの額が入る",
+         [aggregate("2026-08-05","2026-08-05").casts["ママ"].hour,
+          aggregate("2026-08-05","2026-08-05").casts["Aさん"].hour], [7500, 10000]);
+      eq("★30分の切り捨ては人が変わっても効く（5時間20分→5時間）",
+         hourPay(320, "Aさん"), 10000);
+      eq("29分は0円（人が変わっても）", hourPay(29, "Aさん"), 0);
+      eq("★キャスト名を省いた呼び出しは基本時給のまま（昔の検算が通る根拠）",
+         hourPay(300), 7500);
+
+      out.push("  ・時給を上げると、締めていない期間は動く（いままで通り）");
+      setW(1500, 1500);
+      eq("上げる前は2人とも7,500円",
+         [aggregate(F,To).casts["ママ"].hour, aggregate(F,To).casts["Aさん"].hour], [7500, 7500]);
+      S.wages["Aさん"].yen = 2000;
+      eq("★Aさんだけ10,000円に上がる", aggregate(F,To).casts["Aさん"].hour, 10000);
+      eq("ママは動かない",             aggregate(F,To).casts["ママ"].hour, 7500);
+
+      out.push("  ・★★締めたあとに時給を上げても、締めた期間は1円も動かない");
+      setW(1500, 1500);
+      { const L=buildLock(F,To); S.locks[L.key]=L;
+        eq("控えに時給が入っている", (L.conf.wages["Aさん"]||{}).yen, 1500); }
+      S.wages["Aさん"].yen = 2000;                    // 締めたあとに昇給した
+      eq("★締め済み → Aさんは 7,500円のまま", aggregate(F,To).casts["Aさん"].hour, 7500);
+      eq("★ロックを通さなければ 10,000円に動く（計算式は生きている）",
+         aggregateLive(F,To).casts["Aさん"].hour, 10000);
+      eq("★日当も締めたときの額のまま",       aggregate(F,To).casts["Aさん"].pay,  7500);
+      eq("★ロックなしなら日当も10,000円",     aggregateLive(F,To).casts["Aさん"].pay, 10000);
+      eq("★1日だけ出しても控えを使う（紙の出勤表がここを通る）",
+         aggregate("2026-08-05","2026-08-05").casts["Aさん"].hour, 7500);
+      eq("★控えの支給額と、控えの設定で計算し直した額が一致する",
+         aggregate(F,To).casts["Aさん"].pay, S.locks["2026-08-first"].pay["Aさん"]);
+
+      out.push("  ・締めを解除したら、新しい時給で計算し直される");
+      { const K="2026-08-first"; S.lockLog.push(Object.assign({},S.locks[K])); delete S.locks[K]; }
+      eq("★解除後は 10,000円", aggregate(F,To).casts["Aさん"].hour, 10000);
+
+      out.push("  ・紙の出勤表・給与明細にその人の時給が出る");
+      setW(1500, 2000);
+      {
+        const shM = sheetHTML("ママ",  F, To);
+        const shA = sheetHTML("Aさん", F, To);
+        /* ★「1,500が出ない」では見分けられない。同伴の単価も1,500円で、
+             単価行の別の列に出ているため（最初これで空振りした）。
+             注記の「×◯◯円＝この人の時給」を見るのが確実。 */
+        eq("★Aさんの注記は 2,000円",   shA.indexOf("×2,000円＝この人の時給")>=0, true);
+        eq("★Aさんに 1,500円 とは書かれない", shA.indexOf("×1,500円＝この人の時給")>=0, false);
+        eq("ママの注記は 1,500円",      shM.indexOf("×1,500円＝この人の時給")>=0, true);
+        eq("★単価行にもAさんの時給が出る", shA.indexOf(">2,000<")>=0, true);
+        eq("★紙の縦計に警告が出ない",   shA.indexOf('class="msg ng"')<0, true);
+      }
+
+      out.push("  ・★古いデータを開いたとき（migrate）");
+      {
+        const o = migrate(Object.assign(blank(), {casts:["ママ","Aさん","Bさん"]}));
+        eq("★キャスト全員ぶん、基本時給で埋まる",
+           [o.wages["ママ"].yen, o.wages["Aさん"].yen, o.wages["Bさん"].yen], [1500,1500,1500]);
+        eq("★＝開いた瞬間の金額はいままでと同じ（1,500円のまま）",
+           o.wages["ママ"].yen, RATE.hour);
+        // すでに入っている数字は上書きしない
+        const o2 = migrate(Object.assign(blank(),
+                    {casts:["ママ"], wages:{"ママ":{yen:2500}}}));
+        eq("★もう入っている時給は書き換えない", o2.wages["ママ"].yen, 2500);
+        // 空欄で保存されていたものは基本時給で埋め直す（0円事故を起こさない）
+        const o3 = migrate(Object.assign(blank(),
+                    {casts:["ママ"], wages:{"ママ":{yen:""}}}));
+        eq("★空欄は基本時給で埋め直す", o3.wages["ママ"].yen, RATE.hour);
+      }
+
+      out.push("  ・控えの形（snapConf に入っていること＝この機能の要）");
+      setW(1800, 2200);
+      {
+        const c = snapConf();
+        eq("★snapConf に wages が入っている", !!c.wages, true);
+        eq("★中身も控えられている", [c.wages["ママ"].yen, c.wages["Aさん"].yen], [1800,2200]);
+        // 控えは複製であること（あとで⑤設定を触っても控えが道連れにならない）
+        S.wages["ママ"].yen = 9999;
+        eq("★控えは複製（あとから設定を触っても動かない）", c.wages["ママ"].yen, 1800);
+      }
+
+      // 使った状態を片付ける（次の章に持ち越さない）
+      T(["ママ"],[]);
+    }
+
   }catch(e){
     ng++; out.push("！ FAIL 例外: "+e.message+"\n"+e.stack);
   }finally{
@@ -4296,7 +4500,8 @@ function addCast(inputId){
   const el=document.getElementById(inputId), v=el.value.trim();
   if(!v) return;
   if(S.casts.includes(v)){ alert("「"+v+"」はすでに登録されています。"); return; }
-  S.casts.push(v); el.value=""; save(); renderAll();
+  S.casts.push(v); ensureWage(v);            // ★v10.8 基本時給を入れた状態で始める
+  el.value=""; save(); renderAll();
 }
 document.getElementById("btnAddCast").onclick=()=>addCast("newCast");
 document.getElementById("newCast")
@@ -4319,7 +4524,7 @@ document.getElementById("btnAttNewCast").onclick=()=>{
   if(v==null) return;
   const name = v.trim(); if(!name) return;
   if(S.casts.includes(name)){ alert("「"+name+"」はすでに登録されています。下の一覧から選んでください。"); return; }
-  S.casts.push(name);
+  S.casts.push(name); ensureWage(name);      // ★v10.8 基本時給を入れた状態で始める
   const d = document.getElementById("attDate").value || todayStr();
   S.att[d] = S.att[d] || {};
   if(!S.att[d][name]) S.att[d][name] = {in:"", out:""};
@@ -4357,7 +4562,11 @@ function masterSafe(){
 }
 document.getElementById("btnExportSafe").onclick=()=>{
   // 原価は入れない。単価マスタは入れる（足した銘柄が消えると困るため。原価だけ抜く）
-  const o = {casts:S.casts, slips:S.slips, att:S.att, store:S.store, master:masterSafe()};
+  /* ★v10.8：時給（wages）も入れる。隠すのは「店の仕入れ原価」であって、
+     時給は給料そのもの。入れないと取り込んだ側で**全員が基本時給に落ちて
+     金額が黙って変わる**（原価が消える指摘④とまったく同じ形の事故）。 */
+  const o = {casts:S.casts, slips:S.slips, att:S.att, store:S.store,
+             master:masterSafe(), wages:deepCopy(S.wages||{})};
   document.getElementById("ioBox").value = JSON.stringify(o);
   alert("原価を含めずに書き出しました。下の枠の中身をコピーしてください。");
 };
@@ -4398,7 +4607,7 @@ document.getElementById("btnImport").onclick=()=>{
   }catch(e){ alert("読み込めませんでした: "+e.message); }
 };
 document.getElementById("btnSample").onclick=()=>{
-  ["ママ","Aさん","Bさん"].forEach(c=>{ if(!S.casts.includes(c)) S.casts.push(c); });
+  ["ママ","Aさん","Bさん"].forEach(c=>{ if(!S.casts.includes(c)) S.casts.push(c); ensureWage(c); });
   S.slips.push(Object.assign(newSlip("2026-07-30"),{
     no:"1", guests:1, kakari:"ママ", pay:"cash",
     sets:[{kind:"40分",qty:1},{kind:"40分",qty:1}],
