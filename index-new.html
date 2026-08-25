@@ -234,7 +234,7 @@ table.box td.num{text-align:right}
 
 <header>
   <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v11</span></h1>
-  <div class="sub">給料 ＝ 1,500円 × 勤務時間（30分切捨） ＋ バック　／　データは この端末のブラウザ内 のみに保存されます</div>
+  <div class="sub">給料 ＝ <b>時給</b> × 勤務時間（30分切捨） ＋ バック −（送迎・控除）　／　時給は⑤設定で人ごと　／　データは この端末のブラウザ内 のみに保存されます</div>
   <!-- ★v10.7：取扱説明書（検索できる。スマホで見ながらPCで操作する用） -->
   <div class="sub" style="margin-top:5px">
     📖 <a href="manual-new.html" target="_blank" rel="noopener"
@@ -444,7 +444,8 @@ table.box td.num{text-align:right}
   <div class="card">
     <h2>日当の丸め <span class="note">端数（はした）の扱い</span></h2>
     <div class="muted" style="margin-bottom:9px">
-      <b>その日の日当</b>（時給分＋バック＋ボーナス）を、この単位で丸めます。<br>
+      <b>その日の稼ぎ</b>（時給分＋バック＋ボーナス）を、この単位で丸めます。<br>
+      ★<b>丸めたあとで、送迎とその他控除を引きます</b>（引いたあとが日当）。<br>
       ★<b>その日ごと</b>に丸めます。期間の合計をまとめて丸めるのではありません。<br>
       端数が出るのはほとんど<b>ボトルのバック</b>です（売値−原価の20%なので1円単位が出ます）。
     </div>
@@ -636,7 +637,9 @@ table.box td.num{text-align:right}
        ★担当者さんが「25時って1時！？」と混乱したため、変換はしない（2026-08-06 担当者さん判断）
        計算式は変えていない。どちらの書き方でも分数・時給は1円も変わらない
    正となる仕様: 給与計算仕様（社内資料）
-     給料 = 1,500円 × 勤務時間(30分切捨) + バック   ※引き算なし
+     給料 = 時給 × 勤務時間(30分切捨) + バック − (送迎 + その他控除)
+       ★時給は**キャストごと**（v10.8〜。⑤設定。入っていない人は基本時給1,500円）
+       ★引き算は v11 で入った（送迎・その他控除）。日払いはさらにそのあとで引く
      誘客   500円/人 （係のキャストに、伝票の人数分）
      キャスドリ 300円/杯
      テキーラ 600円 （キャスト用3,000円のときだけ）
@@ -3156,7 +3159,8 @@ function sheetHTML(name, from, to){
         : '')
     /* ★v10.5：丸めの断り書き。これが無いと「内訳を足しても日当に合わない」と見える */
     + (roundActive()
-        ? '※<b>日当は'+yen(roundUnit())+'円未満を'+roundModeLabel()+'ています</b>（その日ごと）。'
+        ? '※<b>'+((T.soge||T.other)?'稼ぎ（送迎・控除を引く前）は':'日当は')
+          +yen(roundUnit())+'円未満を'+roundModeLabel()+'ています</b>（その日ごと）。'
           /* ★v11：比べる相手を nittoGross（＝丸めたあと・控除する前）にした。
              控除後の日当と比べると、送迎のぶんだけ必ずズレて「丸めで減った」と嘘の説明が出る。 */
           + (T.nittoRaw!==T.nittoGross
@@ -3364,7 +3368,8 @@ function renderSet(){
   const rmEl = document.getElementById("roundMode");
   if(document.activeElement!==rmEl) rmEl.value = roundConf().mode || "floor";
   document.getElementById("roundInfo").innerHTML = roundActive()
-    ? 'いまの設定：その日の日当を <b>'+yen(roundUnit())+'円単位で'+roundModeLabel()+'</b>ます。'
+    ? 'いまの設定：その日の稼ぎを <b>'+yen(roundUnit())+'円単位で'+roundModeLabel()+'</b>ます'
+      +'（送迎・その他控除は、そのあとで引きます）。'
       +'<br>例：4,333円 → <b>'+yen(roundPay(4333))+'円</b>　／　4,336円 → <b>'+yen(roundPay(4336))+'円</b>'
     : '<b>丸めません。</b>1円単位のまま出します。';
 
@@ -5246,7 +5251,8 @@ function renderCalDetail(){
        + '</tr>';
     h += '</tbody></table>';
     h += '<div class="muted" style="font-size:11px;margin-top:6px">'
-       + '※日当は'+yen(roundUnit())+'円未満を'+roundModeLabel()+'ています（その日ごと）。'
+       + '※'+(hasDed?'稼ぎ（送迎・控除を引く前）は':'日当は')
+       + yen(roundUnit())+'円未満を'+roundModeLabel()+'ています（その日ごと）。'
        + '内訳を足した額と1円単位で違うことがありますが、実際に払うのは「日当」の額です。'
        /* ★v11：控除がある日だけ、式をそのまま添える */
        + (hasDed
