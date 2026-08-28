@@ -851,6 +851,17 @@ function castUseCount(name){
 // ×1.1 → 100円単位で切り上げ。
 // 浮動小数を経由しない（n*1.1 は 41000 で 45100.000000000007 になり、切上が1段ズレる）
 function taxUp(n){ return Math.ceil(Math.round(n)*11/1000)*100; }
+/* ★v11d（2026-08-28 担当者さん指示「個人売上も×1.1で出して」）：個人売上を税込にする。
+   ★★お会計の taxUp とは別物。**わざと分けてある。**
+     taxUp は「お客が払う額」なので **100円単位で切り上げ**（3,500円 → 3,900円）。
+     個人売上は伝票をまたいでキャストに配分した集計値で、お客が払う額ではない。
+     ここに100円切り上げを掛けると、1件ごとに最大99円ふくらんで実態から離れる。
+     → **素直に ×1.1 して四捨五入**（3,500円 → 3,850円）。
+   ★カード払いの伝票も一律 ×1.1（2026-08-28 担当者さん判断）。
+     カードの上乗せ（さらに×1.1）は手数料なので売上に数えない。
+     **店の総売上（slipStoreSales の暫定B）と同じ考え方**に揃えてある。
+   ★数え方を変えるときは**ここ1か所だけ**直す。 */
+function salesTaxed(n){ return Math.round(Math.round(n)*1.1); }
 function yen(n){ return (Math.round(n)||0).toLocaleString("ja-JP"); }
 // 金額を人数で等分。端数は「いちばん上の人」に寄せる（要件書8章で確定）
 function share(total, n){
@@ -2760,9 +2771,14 @@ function renderPay(){
   let cash=0, card=0, sub=0;
   R.slips.forEach(s=>{ const a=accounting(s); sub+=a.sub; if(s.pay==="card") card+=a.total; else cash+=a.total; });
   st.innerHTML =
-    '<tr><th>キャスト</th><th class="n">個人売上</th></tr>'
-    + list.map(c=>'<tr><td>'+esc(c.name)+'</td><td class="n">'+yen(c.sales)+'</td></tr>').join("")
-    + '<tr><th>キャストにつく売上 合計</th><th class="n">'+yen(sum(list,"sales"))+'</th></tr>'
+    /* ★v11d：個人売上は**税込**で出す（2026-08-28 担当者さん指示）。
+       ★1人ずつ丸めて、合計はそれを足す（表の縦計が必ず合うほうを取る）。
+       ★下の「伝票の明細合計（税抜）」はそのまま残す。基準が違う数字が並ぶので、
+         見出しに税抜・税込をはっきり書いておくこと。 */
+    '<tr><th>キャスト</th><th class="n">個人売上（税込）</th></tr>'
+    + list.map(c=>'<tr><td>'+esc(c.name)+'</td><td class="n">'+yen(salesTaxed(c.sales))+'</td></tr>').join("")
+    + '<tr><th>キャストにつく売上 合計（税込）</th><th class="n">'
+      + yen(list.reduce((t,c)=>t+salesTaxed(c.sales),0))+'</th></tr>'
     + '<tr><td class="muted">伝票の明細合計（税抜）</td><td class="n">'+yen(sub)+'</td></tr>'
     + '<tr><td class="muted">お会計 現金 ／ カード</td><td class="n">'+yen(cash)+' ／ '+yen(card)+'</td></tr>'
     + '<tr><td class="muted">伝票枚数</td><td class="n">'+R.slips.length+' 枚</td></tr>';
@@ -2920,7 +2936,8 @@ const SHEET_COLS = [
   {k:"nitto", label:"日当",     w:"wmoney"},
   {k:"nippay",label:"日払い",   w:"wmoney"},
   {k:"sashihiki", label:"差引", w:"wmoney"},
-  {k:"sales", label:"個人売上", w:"wmoney"},
+  /* ★v11d：紙に出すのは**税込**（2026-08-28 担当者さん指示）。税抜の sales は検査用に残してある */
+  {k:"salesTax", label:"個人売上", w:"wmoney"},
   // ★v10.1：値引きの列は外した（2026-08-06 担当者さん指示）。紙には枠があるが使っていない
 ];
 const DOW = ["日","月","火","水","木","金","土"];
@@ -2967,6 +2984,11 @@ function sheetRow(name, date){
     nippay: a ? a.nippay : 0,
     sashihiki : a ? a.net : 0,
     sales : a ? a.sales : 0,
+    /* ★v11d：税込の個人売上。**日ごとに丸めて、合計はそれを足す。**
+       期間まとめて×1.1したのと数円ズレることがあるが、
+       **画面に出ている数字どうしの縦計は必ず合う**ほうを取る（ズレは事故に見えるため）。
+       ズレの検査（下の alerts）は税抜の sales でやっているので、そちらは丸めの影響を受けない。 */
+    salesTax : a ? salesTaxed(a.sales) : 0,
     // 下の集計ボックスは「実際に払うバック額」を出す（杯数×単価で出すとテキーラでズレる）
     hourPay   : a ? a.hour : 0,
     dohanBack : a ? a.dohan : 0,
@@ -2995,11 +3017,11 @@ function sheetHTML(name, from, to){
     nitto:t.nitto+r.nitto, nittoRaw:t.nittoRaw+r.nittoRaw, nittoGross:t.nittoGross+r.nittoGross,
     soge:t.soge+r.soge, other:t.other+r.other, nippay:t.nippay+r.nippay,
     sashihiki:t.sashihiki+r.sashihiki,
-    sales:t.sales+r.sales, bottleBack:t.bottleBack+r.bottleBack,
+    sales:t.sales+r.sales, salesTax:t.salesTax+r.salesTax, bottleBack:t.bottleBack+r.bottleBack,
     hourPay:t.hourPay+r.hourPay, dohanBack:t.dohanBack+r.dohanBack,
     yuuBack:t.yuuBack+r.yuuBack, dBack:t.dBack+r.dBack, tequilaN:t.tequilaN+r.tequilaN,
     bonus:t.bonus+r.bonus
-  }), {attend:0,hours:0,dohan:0,yuu:0,d:0,keep:0,hojo:0,nitto:0,nittoRaw:0,nittoGross:0,sales:0,bottleBack:0,
+  }), {attend:0,hours:0,dohan:0,yuu:0,d:0,keep:0,hojo:0,nitto:0,nittoRaw:0,nittoGross:0,sales:0,salesTax:0,bottleBack:0,
        hourPay:0,dohanBack:0,yuuBack:0,dBack:0,tequilaN:0,bonus:0,
        soge:0,other:0,nippay:0,sashihiki:0});
 
@@ -3018,7 +3040,7 @@ function sheetHTML(name, from, to){
        差引はマイナスになりうるので赤で出す（0円と見分けがつかないと事故る）。 */
     if(c.k==="soge"||c.k==="other"||c.k==="nippay") return "−"+yen(v);
     if(c.k==="sashihiki") return v<0 ? '<span class="minus">−'+yen(-v)+'</span>' : yen(v);
-    if(c.k==="nitto"||c.k==="sales"||c.k==="keep"||c.k==="bonus") return yen(v);
+    if(c.k==="nitto"||c.k==="salesTax"||c.k==="keep"||c.k==="bonus") return yen(v);
     return v;
   };
   const colgroup = '<colgroup>'+SHEET_COLS.map(c=>'<col class="'+c.w+'">').join("")+'</colgroup>';
@@ -3032,7 +3054,7 @@ function sheetHTML(name, from, to){
     if(c.k==="soge"||c.k==="other"||c.k==="nippay") return T[c.k] ? "−"+yen(T[c.k]) : "0";
     if(c.k==="sashihiki") return T.sashihiki<0
       ? '<span class="minus">−'+yen(-T.sashihiki)+'</span>' : yen(T.sashihiki);
-    if(c.k==="nitto"||c.k==="sales"||c.k==="keep"||c.k==="bonus") return yen(T[c.k]);
+    if(c.k==="nitto"||c.k==="salesTax"||c.k==="keep"||c.k==="bonus") return yen(T[c.k]);
     return T[c.k]!=null ? T[c.k] : "";
   };
   const tot  = '<tr class="tot">'+SHEET_COLS.map(c=>'<td>'+totCell(c)+'</td>').join("")+'</tr>';
@@ -3049,8 +3071,10 @@ function sheetHTML(name, from, to){
   const half = (from&&to) ? (from.slice(8,10)==="01" ? "前期" : "後期") : "";
   const ym   = from ? (+from.slice(5,7))+"月" : "";
   const store= (S.store&&S.store.name) ? S.store.name : "";
-  // 対比＝売上に対する人件費（担当者さん確認：日当合計 ÷ 個人売上合計）
-  const hiritsu = T.sales>0 ? Math.round(T.nitto/T.sales*100) : null;
+  /* 対比＝売上に対する人件費（担当者さん確認：日当合計 ÷ 個人売上合計）
+     ★v11d：分母は**税込**の個人売上（2026-08-28 担当者さん判断「税込で揃える」）。
+       分母が増えるので率は下がる（例：48％ → 44％）。画面に出ている数字と基準が揃う。 */
+  const hiritsu = T.salesTax>0 ? Math.round(T.nitto/T.salesTax*100) : null;
   // 下の集計ボックスの合計は、必ず日当合計と一致していないといけない
   // ★v10.3：ボーナスも日当に乗るので、ここにも足さないと検査が誤って鳴る
   const boxSum = T.hourPay + T.dohanBack + T.yuuBack + T.dBack + T.bottleBack + T.bonus;
@@ -3160,7 +3184,7 @@ function sheetHTML(name, from, to){
     +'<table class="box"><tbody><tr>'
     +'<td class="lbl" style="width:auto">日当 合計</td>'
     +'<td class="num" style="font-size:15px;font-weight:700">¥'+yen(T.nitto)+'</td>'
-    +'<td class="lbl" style="width:auto">個人売上<span style="font-size:9px">※確認中</span></td><td class="num">¥'+yen(T.sales)+'</td>'
+    +'<td class="lbl" style="width:auto">個人売上<span style="font-size:9px">税込・※確認中</span></td><td class="num">¥'+yen(T.salesTax)+'</td>'
     +'<td class="lbl" style="width:auto">対比<span style="font-size:9px">※確認中</span></td><td class="num">'+(hiritsu==null?"—":hiritsu+"％")+'</td>'
     +'</tr></tbody></table>'
     /* ★v11：控除の行。**1件も無い期間には出さない**（使っていない欄を並べても迷うだけ）。
@@ -3187,7 +3211,10 @@ function sheetHTML(name, from, to){
     +'<b>テキーラは1杯をドリンク'+TEQUILA_AS_DRINKS+'杯として数えます</b>（バックが'+yen(RATE.tequila)+'円のため）。<br>'
     +'※keep＝ボトルの「売値−原価」。その'+Math.round(RATE.bottle*100)+'％がバック。<br>'
     +'※補助＝出勤した日に1（金額には効きません）。<br>'
-    +'※対比＝日当合計 ÷ 個人売上（売上に対する人件費）。<br>'
+    /* ★v11d：税込にしたことを必ず書く。書かないと「伝票の合計と合わない」と見える
+       （伝票の明細合計は税抜。ここは×1.1したもの） */
+    +'※<b>個人売上・対比は税込</b>（明細の合計×1.1）。伝票の「小計」は税抜なので額が違います。<br>'
+    +'※対比＝日当合計 ÷ 個人売上（税込）（売上に対する人件費）。<br>'
     /* ★v11：控除の断り書き。**式をそのまま書く。**
        これが無いと「内訳を足しても日当に合わない」と見える（丸めのときと同じ罠）。 */
     + ((T.soge||T.other||T.nippay)
@@ -4020,12 +4047,45 @@ function KYABA_TEST(){
     eq("勤務時間5.0（30分切り捨て後）", sh.indexOf(">5<")>=0, true);
     eq("Dはドリンク5杯＋テキーラ3杯×2＝11", sh.indexOf(">11<")>=0, true);
     eq("日当11,300が載る", sh.indexOf(">11,300<")>=0, true);
-    eq("個人売上23,500が載る", sh.indexOf(">23,500<")>=0, true);
+    /* ★v11d（2026-08-28 担当者さん指示「個人売上も×1.1で出して」）。
+       23,500（税抜）× 1.1 ＝ 25,850。 */
+    eq("★個人売上は税込25,850で載る", sh.indexOf(">25,850<")>=0, true);
+    eq("★税抜の23,500は紙に出ない", sh.indexOf(">23,500<")>=0, false);
+    /* ★★お会計の taxUp（100円単位で切り上げ）を使っていない証拠。
+       taxUp(23500) は 25,900 になる。ここが25,900だったら掛け先を間違えている。 */
+    eq("★お会計の100円切り上げ（25,900）にはなっていない", sh.indexOf(">25,900<")>=0, false);
+    eq("★salesTaxed は素直な×1.1の四捨五入", [salesTaxed(23500), taxUp(23500)], [25850, 25900]);
+    eq("★端数は四捨五入（1,005円 → 1,106円）", salesTaxed(1005), 1106);
     eq("単価行に時給1,500と誘客500とD300が出る",
        [sh.indexOf(">1,500<")>=0, sh.indexOf(">500<")>=0, sh.indexOf(">300<")>=0], [true,true,true]);
     eq("keepの単価は率のまま0.2で出す", sh.indexOf(">0.2<")>=0, true);
     eq("補助は出勤した日に1", sh.indexOf(">1<")>=0, true);
-    eq("対比＝日当÷個人売上（11,300÷23,500＝48％）", sh.indexOf("対比　48％")>=0, true);
+    /* ★v11d：分母が税込になったので率は下がる（11,300 ÷ 25,850 ＝ 43.7％ → 44％）。
+       ★担当者さん判断「税込で揃える」（2026-08-28）。 */
+    eq("★対比＝日当÷個人売上（税込）（11,300÷25,850＝44％）", sh.indexOf("対比　44％")>=0, true);
+    eq("★税抜のときの48％にはならない", sh.indexOf("対比　48％")>=0, false);
+    eq("★紙に「税込」と断ってある", sh.indexOf("個人売上・対比は税込")>=0, true);
+
+    /* ★★v11d：カード払いの伝票も一律×1.1（2026-08-28 担当者さん判断）。
+       お会計はカードだと ×1.1 を2回かける（cash → card。上乗せは手数料相当）。
+       個人売上はそこを数えない。**店の総売上（暫定B）と同じ考え方**。
+       ★ここが×1.21になっていたら、掛ける相手を accounting の card にしてしまっている。 */
+    {
+      const cardSlip = Object.assign(newSlip("2026-07-30"),
+        {no:"9", guests:1, kakari:"ママ", pay:"card",
+         sets:[{kind:"60分キープ",qty:1}]});      // 3,500円（税抜）
+      T(["ママ"],[cardSlip],{"2026-07-30":{"ママ":{in:"20:00",out:"01:00"}}});
+      const a = aggregate("2026-07-30","2026-07-30").casts["ママ"];
+      eq("カード伝票でも個人売上（税抜）はそのまま", a.sales, 3500);
+      eq("★★カード伝票でも税込は×1.1（×1.21ではない）", salesTaxed(a.sales), 3850);
+      // 同じ伝票のお会計は、カードなので2段の税込になる（こちらは別の数字で正しい）
+      eq("お会計のほうはカードの上乗せが乗る", accounting(cardSlip).total, taxUp(taxUp(3500)));
+    }
+    /* ★v11d：日ごとに丸めて合計する（表の縦計が必ず合うようにするため）。
+       2日とも1,005円なら 1,106 × 2 ＝ 2,212。
+       期間まとめて×1.1すると 2,010×1.1＝2,211 で1円ちがう。**縦計が合うほうを取っている。** */
+    eq("★日ごとに丸めてから足している（縦計が合う）",
+       [salesTaxed(1005)*2, salesTaxed(1005*2)], [2212, 2211]);
 
     // 紙の実物（6月後期・Bさん）と同じ計算になるか
     eq("実物の検算：44.5h×1,500＝66,750", Math.round(44.5*RATE.hour), 66750);
