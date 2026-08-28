@@ -2146,9 +2146,10 @@ function renderSlipEditor(){
            ? '<div><label>他店の名前</label><input data-p="annaiOther" value="'+esc(sp.annaiOther)+'" placeholder="店名を入れてください"></div>'
            : "")
       : "")
-   +'<div class="narrow"><label>同伴</label><div style="padding:6px 0"><input type="checkbox" data-p="dohan"'+(sp.dohan?" checked":"")+'> <span class="muted">あり</span></div></div>'
-   +'<div><label>同伴したキャスト</label><select data-p="dohanCast"'+(sp.dohan?"":" disabled")+'>'+castOptions(sp.dohanCast,true,"（係と同じ）")+'</select></div>'
-   +'<div class="narrow"><label>支払い</label><select data-p="pay"><option value="cash"'+(sp.pay==="cash"?" selected":"")+'>現金</option><option value="card"'+(sp.pay==="card"?" selected":"")+'>カード</option></select></div>'
+   /* ★v11b：同伴と支払いはここから外した（2026-08-25 担当者さん指示）。
+      紙のお会計票では **同伴は明細に書かれ、支払いは一番下（お客様名のところ）**。
+      打つ人が紙を上から順に写せるように、画面もその場所へ移した。
+      ★data-p は変えていないので、保存の形も計算も1文字も変わっていない。 */
    +'</div>'
    +(sp.guests>0 && sp.kakari && sp.kakari!==ANNAI
       ? '<div class="msg info" style="margin-top:10px">誘客：'+esc(sp.kakari)+' に '+esc(sp.guests)+'人 × 500円 ＝ <b>'+yen(sp.guests*RATE.yuukyaku)+'円</b></div>'
@@ -2157,8 +2158,22 @@ function renderSlipEditor(){
       扱いはフリーと同じ＝誘客・係の売上はつかない。計算は aggregate() 側で行う */
    +'</div>'
 
-   +'<div class="card"><h2>明細</h2>'
+   +'<div class="card"><h2>明細 <span class="note">紙のお会計票の「品名」の欄。上から順に写せます</span></h2>'
    +blk("セット","3,500円／本","gl-set",["種類","本数","金額",""],setLines,"sets")
+   /* ★v11b：同伴（2026-08-25 担当者さん指示「同伴は伝票に書かれる。セットの下でいい」）。
+      ★blk() を使っていないのは、同伴が**行を足すもの**ではなく1枚に1つだからだけ。
+        見た目は他のブロックに揃えてある。 */
+   +'<div class="blk"><h3>同伴 <span class="tag">1,500円／件</span></h3>'
+   +'<div class="row" style="align-items:flex-end">'
+   +'<div class="narrow"><label>同伴</label><div style="padding:6px 0">'
+   +'<input type="checkbox" data-p="dohan"'+(sp.dohan?" checked":"")+'> <span class="muted">あり</span></div></div>'
+   +'<div><label>同伴したキャスト</label><select data-p="dohanCast"'+(sp.dohan?"":" disabled")+'>'
+   +castOptions(sp.dohanCast,true,"（係と同じ）")+'</select></div>'
+   +'</div>'
+   +(sp.dohan && !(sp.dohanCast||"").trim() && sp.kakari && sp.kakari!==ANNAI
+      ? '<div class="muted" style="font-size:11px;margin-top:4px">相手を選ばないと、係の「'
+        +esc(sp.kakari)+'」さんに 1,500円 がつきます</div>' : '')
+   +'</div>'
    +blk("ボトル","(売値−原価)×20% がバック","gl-bot",["銘柄","売値","本数","金額",""],botLines,"bottles")
    +blk("キャストドリンク","1,500円／杯・バック300円","gl-drk",["飲んだキャスト","杯数","金額",""],drkLines,"drinks")
    +blk("その他","キャスト欄が空＝客用／名前を入れるとキャスト用の単価に切り替わります","gl-oth",["品名","キャスト","数量","金額",""],othLines,"others")
@@ -2174,6 +2189,15 @@ function renderSlipEditor(){
    +'<div class="total-line"><span class="lbl">明細合計（税抜）</span><span>'+yen(a.sub)+' 円</span></div>'
    +'<div class="total-line"><span class="lbl">現金（明細合計 ×1.1 → 100円切上）</span><span>'+yen(a.cash)+' 円</span></div>'
    +'<div class="total-line"><span class="lbl">カード（現金額 ×1.1 → 100円切上）</span><span>'+yen(a.card)+' 円</span></div>'
+   /* ★v11b：支払いはここ（2026-08-25 担当者さん指示「紙の伝票のお客様名のところに配置して」）。
+      紙では一番下が「◯◯様 → 税込合計金額」の並び。その場所に置いた。
+      ★どちらを選んだかで下の「お会計」の額が変わるので、隣にあるほうが読める。
+        ヘッダー（画面のいちばん上）にあったときは、会計から遠くて結び付かなかった。 */
+   +'<div class="total-line" style="align-items:center">'
+   +'<span class="lbl">支払い</span>'
+   +'<span><select data-p="pay" style="width:auto;min-width:120px">'
+   +'<option value="cash"'+(sp.pay==="cash"?" selected":"")+'>現金</option>'
+   +'<option value="card"'+(sp.pay==="card"?" selected":"")+'>カード</option></select></span></div>'
    +'<div class="total-line big"><span>お会計（'+(sp.pay==="card"?"カード":"現金")+'）</span><span>'+yen(a.total)+' 円</span></div>'
    +'</div></div>';
 
