@@ -168,7 +168,14 @@ table.sheet th,table.sheet td{border:1px solid #333;padding:2px 3px;text-align:c
 table.sheet th{font-weight:700;font-size:10.5px;background:#fff}
 table.sheet td.d{text-align:center}
 table.sheet tr.tot td{font-weight:700;border-top:2px solid #333}
-table.sheet tr.rate td{color:#555}
+/* ★v11e：いちばん下の「単価の行」だけ小さく。列が増えたぶん幅が細くなり、
+   ここの「1,500」が1文字ぶん切れていた。単価は補足なので、ここだけ小さくして入れる
+   （全列を広げると、金額の列が犠牲になる） */
+table.sheet tr.rate td{color:#555;font-size:10px}
+/* ★v11e（2026-08-28）：この px は**もう使われていない**（style属性の％が勝つ）。
+   残してあるのは、col のクラス名が何を意図していたか（日付は細く・金額は太く）を
+   読めるようにするため。★実際の幅は sheetHTML() の COLW から％で作っている。
+   ここの数字を直しても画面は動かない。直すなら COLW のほう。 */
 table.sheet col.wday{width:26px} table.sheet col.wnum{width:38px} table.sheet col.wmoney{width:56px}
 table.sheet .off{background:#fafafa;color:#bbb}
 table.box{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:10px}
@@ -184,6 +191,12 @@ table.box td.num{text-align:right}
   @page{ size: A4 landscape; margin: 8mm }
   body.printing>header,body.printing>nav,body.printing>main{display:none}
   body.printing table.sheet{font-size:9px}
+  /* ★v11e：いちばん下の「単価の行」は画面で10pxに落としてある（td 指定）。
+     td のほうが詳細度で勝つので、**印刷でも10pxのまま残ってしまう**。
+     A4横は 1,050px くらいしか使えないので、ここが切れる。印刷でも一緒に縮める。 */
+  body.printing table.sheet tr.rate td{font-size:8px}
+  /* ★セルの余白も詰める。紙は画面より狭いので、ここで数px稼ぐと字が切れなくなる */
+  body.printing table.sheet th,body.printing table.sheet td{padding:1px 2px}
   body.printing .msg{border:1px solid #999}
   body.printing div[style*="overflow-x"]{overflow:visible !important}
   body.printing #payslipModal{position:static;background:none;padding:0;overflow:visible}
@@ -3043,7 +3056,22 @@ function sheetHTML(name, from, to){
     if(c.k==="nitto"||c.k==="salesTax"||c.k==="keep"||c.k==="bonus") return yen(v);
     return v;
   };
-  const colgroup = '<colgroup>'+SHEET_COLS.map(c=>'<col class="'+c.w+'">').join("")+'</colgroup>';
+  /* ★v11e（2026-08-28 担当者さん「見切れてるね」）：列幅を**割合（％）で出す**。
+     ★★もとは CSS の px 固定（wday 26px / wnum 38px / wmoney 56px）だった。
+       列がいくつあっても各列がその px を主張するので、**列が増えると表が箱を突き破る**。
+       v11 で送迎・他控除・日払い・差引の4列を足したとき、まさにそれが起きていた
+       （箱の右端 1,215px に対して最後のセルの右端が 1,232px。個人売上の列が切れていた）。
+     ★★**印刷でも同じだけ切れる。** `body.printing` の font-size は効くが、
+       col の px 幅は変わらないため。給与明細は紙で渡すので、ここは画面より紙のほうが重い。
+     → 重みの合計に対する割合にする。**列が何本になっても合計100％で必ず収まる。**
+       見た目の比率（日付は細く、金額は太く）はいままでと同じ。 */
+  /* ★比率としてだけ使う。pxではない。
+     ★wday が 26 だと見出しの「曜日」が1文字ぶん切れる（px固定のころは
+       表があふれていたぶん実際には広く出ていて、気づけなかった）。32にして入るようにした。 */
+  const COLW = {wday:32, wnum:38, wmoney:56};
+  const wSum = SHEET_COLS.reduce((t,c)=>t+(COLW[c.w]||38), 0);
+  const colgroup = '<colgroup>'+SHEET_COLS.map(c=>
+      '<col class="'+c.w+'" style="width:'+((COLW[c.w]||38)/wSum*100).toFixed(3)+'%">').join("")+'</colgroup>';
   const head = '<tr>'+SHEET_COLS.map(c=>'<th'+(unkCol(c)?' class="unk"':'')+'>'+esc(c.label)+'</th>').join("")+'</tr>';
   const body = rows.map(r=>'<tr'+(r.attend?'':' class="off"')+'>'
       +SHEET_COLS.map(c=>'<td>'+cell(r,c)+'</td>').join("")+'</tr>').join("");
