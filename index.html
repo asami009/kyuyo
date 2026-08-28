@@ -26,6 +26,19 @@ nav button{flex:0 0 auto;background:none;border:none;color:#b8c1cc;padding:11px 
 nav button.on{color:#fff;border-bottom-color:#5b9bff;background:#333d4b}
 main{max-width:1180px;margin:0 auto;padding:16px}
 section{display:none} section.on{display:block}
+/* ★v11c（2026-08-28 担当者さん要望「伝票みたいな比率にしたい」）：
+   ①伝票を打つ画面だけ横を詰めて、紙のお会計票と同じ縦長の比率にする。
+   ★①だけ。④締め・給与の表と⑦カレンダーは列が多いので広いまま
+     （ここを一緒に狭めると横スクロールが出る）。 */
+#s-slip{max-width:640px;margin-left:auto;margin-right:auto}
+/* ★v11c：①を640pxに詰めたぶん、**ボトルの銘柄だけ**入りきらない。
+   45銘柄のうち30銘柄が切れて、「シーバスリーガル ミズナラ」と「シーバスリーガル 18年」が
+   どちらも『シーバスリーガル…』になり、打つ人が見分けられなくなる（実測で確認）。
+   → 銘柄だけ行をまるごと使う。売値・本数・金額はその下の段に並べる。
+   ★これはスマホ（820px以下）でやっているのと同じ形。
+   ★切れるのはボトルだけ。セット・キャスト・その他の品名は640pxでも全部入る。 */
+#s-slip .gl-bot{grid-template-columns:110px 70px 1fr 44px}
+#s-slip .gl-bot>div:first-child{grid-column:1/-1}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 .card>h2{margin:0 0 10px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .card>h2 .ttl{white-space:nowrap}
@@ -155,7 +168,14 @@ table.sheet th,table.sheet td{border:1px solid #333;padding:2px 3px;text-align:c
 table.sheet th{font-weight:700;font-size:10.5px;background:#fff}
 table.sheet td.d{text-align:center}
 table.sheet tr.tot td{font-weight:700;border-top:2px solid #333}
-table.sheet tr.rate td{color:#555}
+/* ★v11e：いちばん下の「単価の行」だけ小さく。列が増えたぶん幅が細くなり、
+   ここの「1,500」が1文字ぶん切れていた。単価は補足なので、ここだけ小さくして入れる
+   （全列を広げると、金額の列が犠牲になる） */
+table.sheet tr.rate td{color:#555;font-size:10px}
+/* ★v11e（2026-08-28）：この px は**もう使われていない**（style属性の％が勝つ）。
+   残してあるのは、col のクラス名が何を意図していたか（日付は細く・金額は太く）を
+   読めるようにするため。★実際の幅は sheetHTML() の COLW から％で作っている。
+   ここの数字を直しても画面は動かない。直すなら COLW のほう。 */
 table.sheet col.wday{width:26px} table.sheet col.wnum{width:38px} table.sheet col.wmoney{width:56px}
 table.sheet .off{background:#fafafa;color:#bbb}
 table.box{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:10px}
@@ -171,6 +191,12 @@ table.box td.num{text-align:right}
   @page{ size: A4 landscape; margin: 8mm }
   body.printing>header,body.printing>nav,body.printing>main{display:none}
   body.printing table.sheet{font-size:9px}
+  /* ★v11e：いちばん下の「単価の行」は画面で10pxに落としてある（td 指定）。
+     td のほうが詳細度で勝つので、**印刷でも10pxのまま残ってしまう**。
+     A4横は 1,050px くらいしか使えないので、ここが切れる。印刷でも一緒に縮める。 */
+  body.printing table.sheet tr.rate td{font-size:8px}
+  /* ★セルの余白も詰める。紙は画面より狭いので、ここで数px稼ぐと字が切れなくなる */
+  body.printing table.sheet th,body.printing table.sheet td{padding:1px 2px}
   body.printing .msg{border:1px solid #999}
   body.printing div[style*="overflow-x"]{overflow:visible !important}
   body.printing #payslipModal{position:static;background:none;padding:0;overflow:visible}
@@ -189,6 +215,18 @@ table.box td.num{text-align:right}
 .gl-oth{grid-template-columns:1.2fr 1fr 78px 110px 44px}
 .gl-adj{grid-template-columns:1.6fr 120px 44px}
 .gl-att{grid-template-columns:1.2fr 108px 108px 1fr}
+/* ★v11：送迎費・その他控除・日払いの段。キャストの行の下に**全幅で1段**置く。
+   4列の中に押し込むと欄が潰れるので、行をまたがせている（スマホでも同じ形） */
+.att-ded{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;
+  margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.att-ded .g{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--sub)}
+.att-ded .g input[type=text],.att-ded .g input[type=number]{width:74px;text-align:right;padding:5px 7px}
+.att-ded .g input.note{width:150px;text-align:left}
+.att-ded .g label{display:flex;align-items:center;gap:4px;cursor:pointer;font-weight:600;color:var(--fg)}
+.att-ded .res{margin-left:auto;font-size:12px;font-weight:700;white-space:nowrap}
+.att-ded .res .minus{color:#c0392b}
+/* ★v11：差引がマイナスの額。0円と見分けがつかないと事故るので必ず赤 */
+.minus{color:#c0392b;font-weight:700}
 .gl-cost{grid-template-columns:1.6fr 110px 130px 1fr}
 @media(max-width:820px){
   main{padding:10px}
@@ -221,8 +259,8 @@ table.box td.num{text-align:right}
 <body>
 
 <header>
-  <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v10.9</span></h1>
-  <div class="sub">給料 ＝ 1,500円 × 勤務時間（30分切捨） ＋ バック　／　データは この端末のブラウザ内 のみに保存されます</div>
+  <h1>伝票入力・給与計算 <span style="opacity:.6;font-weight:400">v11</span></h1>
+  <div class="sub">給料 ＝ <b>時給</b> × 勤務時間（30分切捨） ＋ バック −（送迎・控除）　／　時給は⑤設定で人ごと　／　データは この端末のブラウザ内 のみに保存されます</div>
   <!-- ★v10.7：取扱説明書（検索できる。スマホで見ながらPCで操作する用） -->
   <div class="sub" style="margin-top:5px">
     📖 <a href="manual.html" target="_blank" rel="noopener"
@@ -282,6 +320,11 @@ table.box td.num{text-align:right}
 <section id="s-att">
   <div class="card">
     <h2>出勤時間 <span class="note">伝票に出ないので、ここで入れる。給料の時給分の元ネタ</span></h2>
+    <div class="msg info" style="font-size:12px">
+      ★<b>送迎費・その他控除・日払い</b>も、この画面で人ごとに入れます（下の一覧の各行）。<br>
+      <b>日当</b>＝時給分＋バック＋ボーナス −（送迎＋その他控除）／
+      <b>差引</b>＝日当 − 日払い（<b>これから渡す額</b>。マイナスになることもあります）
+    </div>
     <div class="row">
       <div class="date"><label>日付</label><input type="date" id="attDate"></div>
       <div class="muted" style="flex:1 1 240px">
@@ -427,7 +470,8 @@ table.box td.num{text-align:right}
   <div class="card">
     <h2>日当の丸め <span class="note">端数（はした）の扱い</span></h2>
     <div class="muted" style="margin-bottom:9px">
-      <b>その日の日当</b>（時給分＋バック＋ボーナス）を、この単位で丸めます。<br>
+      <b>その日の稼ぎ</b>（時給分＋バック＋ボーナス）を、この単位で丸めます。<br>
+      ★<b>丸めたあとで、送迎とその他控除を引きます</b>（引いたあとが日当）。<br>
       ★<b>その日ごと</b>に丸めます。期間の合計をまとめて丸めるのではありません。<br>
       端数が出るのはほとんど<b>ボトルのバック</b>です（売値−原価の20%なので1円単位が出ます）。
     </div>
@@ -449,6 +493,23 @@ table.box td.num{text-align:right}
       </div>
     </div>
     <div class="muted" id="roundInfo" style="margin-top:9px"></div>
+  </div>
+
+  <!-- ★v11：送迎費の基本額（2026-08-28） -->
+  <div class="card">
+    <h2>送迎費 <span class="note">②出勤時間で「送迎」に印を付けたとき、はじめに入る額</span></h2>
+    <div class="muted" style="margin-bottom:9px">
+      ②出勤時間の画面で<b>送迎に印を付けると、この額が自動で入ります</b>。<br>
+      <b>距離で変わる日は、その日の欄で直してください</b>（直した額がその日の額になります）。<br>
+      ★ここを変えても<b>すでに入れた日の額は変わりません</b>。これから印を付ける日から効きます。
+    </div>
+    <div class="row">
+      <div style="max-width:190px">
+        <label>基本額（円）</label>
+        <input type="text" inputmode="numeric" data-num="1" id="sogeBase" placeholder="500">
+      </div>
+      <div class="muted" id="sogeInfo" style="align-self:flex-end;padding-bottom:9px"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -602,7 +663,9 @@ table.box td.num{text-align:right}
        ★担当者さんが「25時って1時！？」と混乱したため、変換はしない（2026-08-06 担当者さん判断）
        計算式は変えていない。どちらの書き方でも分数・時給は1円も変わらない
    正となる仕様: 給与計算仕様（社内資料）
-     給料 = 1,500円 × 勤務時間(30分切捨) + バック   ※引き算なし
+     給料 = 時給 × 勤務時間(30分切捨) + バック − (送迎 + その他控除)
+       ★時給は**キャストごと**（v10.8〜。⑤設定。入っていない人は基本時給1,500円）
+       ★引き算は v11 で入った（送迎・その他控除）。日払いはさらにそのあとで引く
      誘客   500円/人 （係のキャストに、伝票の人数分）
      キャスドリ 300円/杯
      テキーラ 600円 （キャスト用3,000円のときだけ）
@@ -632,7 +695,9 @@ const TEQUILA_AS_DRINKS = RATE.tequila / RATE.drink;   // ＝ 2
    （伝票入力・集計・出勤表・原価タブなど35箇所）は一切変更せずに済む。
    ========================================================================= */
 const DEFAULT_DRINK_PRICE = 1500;      // キャストドリンク
-const DEFAULT_SET_KINDS = [{name:"40分",price:3500},{name:"60分キープ",price:3500}];
+/* ★v11c（2026-08-28 担当者さん要望「セットのデフォを60分に」）：先頭＝伝票に足したとき
+   最初に入る種類。実際に多いほうを先頭に置く。★40分も消していない。 */
+const DEFAULT_SET_KINDS = [{name:"60分キープ",price:3500},{name:"40分",price:3500}];
 
 const DEFAULT_OTHERS = [
   // castPrice: キャスト欄に名前を入れたときの単価（紙のカッコ書きに相当）
@@ -799,6 +864,17 @@ function castUseCount(name){
 // ×1.1 → 100円単位で切り上げ。
 // 浮動小数を経由しない（n*1.1 は 41000 で 45100.000000000007 になり、切上が1段ズレる）
 function taxUp(n){ return Math.ceil(Math.round(n)*11/1000)*100; }
+/* ★v11d（2026-08-28 担当者さん指示「個人売上も×1.1で出して」）：個人売上を税込にする。
+   ★★お会計の taxUp とは別物。**わざと分けてある。**
+     taxUp は「お客が払う額」なので **100円単位で切り上げ**（3,500円 → 3,900円）。
+     個人売上は伝票をまたいでキャストに配分した集計値で、お客が払う額ではない。
+     ここに100円切り上げを掛けると、1件ごとに最大99円ふくらんで実態から離れる。
+     → **素直に ×1.1 して四捨五入**（3,500円 → 3,850円）。
+   ★カード払いの伝票も一律 ×1.1（2026-08-28 担当者さん判断）。
+     カードの上乗せ（さらに×1.1）は手数料なので売上に数えない。
+     **店の総売上（slipStoreSales の暫定B）と同じ考え方**に揃えてある。
+   ★数え方を変えるときは**ここ1か所だけ**直す。 */
+function salesTaxed(n){ return Math.round(Math.round(n)*1.1); }
 function yen(n){ return (Math.round(n)||0).toLocaleString("ja-JP"); }
 // 金額を人数で等分。端数は「いちばん上の人」に寄せる（要件書8章で確定）
 function share(total, n){
@@ -1028,7 +1104,7 @@ let S = load();
 syncMaster();
 function blank(){ return {casts:["ママ"], slips:[], att:{}, costs:{}, store:{name:""}, ui:{},
                           bonus:defaultBonus(), round:defaultRound(), master:defaultMaster(),
-                          locks:{}, lockLog:[], wages:{}}; }
+                          locks:{}, lockLog:[], wages:{}, deduct:defaultDeduct()}; }
 /* ★v10.3：ママの売上ボーナス（総売上ラダー）の設定（2026-08-16）
    ・単価マスタ（S.master）の中ではなく S の直下に置いている。
      ⑤設定の「単価マスタを最初の状態に戻す」を押したときに、
@@ -1056,6 +1132,37 @@ function defaultRound(){
     unit: 10,        // 丸める単位（円）。0 または 1 で「丸めない」
     mode: "floor"    // floor=切り捨て ／ ceil=切り上げ ／ round=四捨五入
   };
+}
+/* ★v11：送迎費・その他控除・日払い（2026-08-28 担当者さん指示）
+   ・②出勤時間の画面で、その日・その人ごとに入れる。
+   ・**日当 ＝ 丸めたあとの（時給＋バック＋ボーナス） −（送迎 ＋ その他控除）**
+     ＝ 担当者さんの式「時給＋バック−（送迎＋その他控除）＝日当」そのまま。
+   ・**差引 ＝ 日当 − 日払い**。日払いは「もう渡したお金」なので日当の中に混ぜない
+     （A案。2026-08-28 担当者さん選択）。★差引はマイナスになってよい。
+   ・★引く順番が肝：**丸めてから引く**。
+     丸めは「店が払う日当」の端数処理、控除は実費なので別もの。
+     先に引くと、送迎が730円のような端数のときに丸めに巻き込まれて額が変わる。
+   ・sogeBase は**打つときの初期値**でしかない（チェックを入れると入る額）。
+     実際に使う額は日ごとに保存されるので、**締めの控え（snapConf）には入れない**。
+     ここを控えると「あとから基本額を変えたら過去も動く」ように見えて紛らわしい。 */
+function defaultDeduct(){
+  return {
+    sogeBase: 500     // 送迎費の基本額（円）。距離で変わる日は、その日の欄で直す
+  };
+}
+/* 送迎費の基本額。0以上の整数。設定が壊れていても500に戻す */
+function sogeBase(){
+  const v = Math.round(+((S&&S.deduct&&S.deduct.sogeBase)!=null ? S.deduct.sogeBase : 500));
+  return (isFinite(v) && v>=0) ? v : 500;
+}
+/* その日・その人の控除。②の入力欄と集計の**両方がここを通る**（2通りの読み方を作らない）。
+   ★出勤時間が空でも控除だけは生きる（時間を打つ前に控除を打っても消えない）。 */
+function deductOf(date, name){
+  const r = ((S.att[date]||{})[name]) || {};
+  const soge = r.soge ? Math.max(0, Math.round(+r.sogeYen||0)) : 0;
+  const other= Math.max(0, Math.round(+r.other||0));
+  const nip  = Math.max(0, Math.round(+r.nippay||0));
+  return {soge, other, nippay:nip, note:(r.otherNote||"").trim(), sum:soge+other};
 }
 /* ★v10.7：締め済みの期間を計算しているあいだは、締めたときの丸め設定を使う（LOCK_CONF） */
 function roundConf(){
@@ -1259,13 +1366,20 @@ function lockPreflight(from,to){
 function buildLock(from,to){
   const H = halfOfRange(from,to); if(!H) return null;
   const R = aggregateLive(from,to);
-  const list = Object.keys(R.casts).map(k=>R.casts[k]).filter(c=>c.pay>0||c.sales>0||c.min>0);
+  /* ★v11：控除で日当が0以下になった人も締めに入れる（`c.pay>0` だけだと控えから消える） */
+  const list = Object.keys(R.casts).map(k=>R.casts[k])
+                 .filter(c=>c.pay!==0||c.sales>0||c.min>0||c.soge||c.other||c.nippay);
   const pay = {}; list.forEach(c=>{ pay[c.name] = c.pay; });
+  /* ★v11：**実際に渡した額（差引）も控える。**
+     pay（日当）だけ控えると、日払いを引いた本当の渡し額が後から辿れない。
+     ★pay は残したまま足している。既存の控えの読み方を壊さないため。 */
+  const net = {}; list.forEach(c=>{ net[c.name] = c.net; });
   const hist = (S.lockLog||[]).filter(x=>x.key===H.key);
   const prev = hist.length ? hist[hist.length-1] : null;
   const L = {key:H.key, label:H.label, from:from, to:to,
              at:new Date().toISOString(), conf:snapConf(),
              pay:pay, total:list.reduce((t,c)=>t+c.pay,0),
+             net:net, netTotal:list.reduce((t,c)=>t+c.net,0),
              prev: prev ? {at:prev.at, total:prev.total} : null};
   // 確認ダイアログ用の付録。保存はされるが計算には一切使わない
   Object.defineProperty(L, "list", {value:list, enumerable:false});
@@ -1359,6 +1473,11 @@ function migrate(o){
     if(o.round.unit==null) o.round.unit = 10;
     if(!o.round.mode)      o.round.mode = "floor";
   }
+  /* ★v11：送迎費の基本額。v10.9以前のデータには無いので初期値（500円）を入れる。
+     ★att の各行には何も足さない。**無ければ0扱い**なので、
+       開いた瞬間の金額はいままでと1円も変わらない。 */
+  if(!o.deduct || typeof o.deduct!=="object") o.deduct = defaultDeduct();
+  else if(o.deduct.sogeBase==null)            o.deduct.sogeBase = 500;
   /* ★v10.7：締めのロック。v10.6以前のデータには無いので空で入れる
      （＝何も締まっていない状態。金額はいままでと1円も変わらない）。 */
   if(!o.locks || typeof o.locks!=="object") o.locks = {};
@@ -1378,6 +1497,17 @@ function migrate(o){
   const m = o.master;
   if(m.drinkPrice==null)      m.drinkPrice = DEFAULT_DRINK_PRICE;
   if(!Array.isArray(m.sets)   || !m.sets.length)    m.sets    = deepCopy(DEFAULT_SET_KINDS);
+  /* ★v11c（2026-08-28 担当者さん要望「セットのデフォを60分に」）：
+     もう使っている人の⑤設定にはマスタが保存済みなので、上の初期値を入れ替えただけでは効かない。
+     ここで並べ替える。★消さない・値段も触らない。**順番だけ**。
+     伝票は品名（kind）で単価を引いているので、並べ替えても計算は1円も動かない。
+     ★1回だけ走らせる。毎回走らせると、担当者さんが⑤設定で手で並べ替えても戻ってしまう。 */
+  if(!o.mig || typeof o.mig!=="object") o.mig = {};
+  if(!o.mig.setOrder60){
+    o.mig.setOrder60 = 1;
+    const i60 = m.sets.findIndex(x=>x && x.name==="60分キープ");
+    if(i60 > 0) m.sets.unshift(m.sets.splice(i60,1)[0]);
+  }
   if(!Array.isArray(m.others) || !m.others.length)  m.others  = deepCopy(DEFAULT_OTHERS);
   if(!Array.isArray(m.bottles)|| !m.bottles.length) m.bottles = deepCopy(DEFAULT_BOTTLES);
   /* ★v10：ショットのバックが「未確認」のまま残っているデータを補う（2026-08-06）
@@ -1656,16 +1786,18 @@ function aggregateLive(from,to){
   const g = n => (A[n] = A[n] || {name:n, min:0, minPaid:0, hour:0,
       yuukyaku:0, yuukyakuN:0, drink:0, drinkN:0, tequila:0, tequilaN:0,
       dohan:0, dohanN:0, bottle:0, back:0, pay:0, sales:0, bonus:0,
+      // ★v11：送迎費・その他控除・日払い（日当から引く／差引に効く）
+      soge:0, sogeN:0, other:0, nippay:0, otherNotes:[],
       // 給与明細の「日次内訳」用（金額と本数）
       drinkAmt:0, tequilaAmt:0, bottleAmt:0, bottleQty:0, setAmt:0,
       bottleBase:0,     // 売値−原価。紙の keep 列に入る金額（×0.2 がバック）
       // ★v10.5：日当を「その日ごと」に丸めるため、日付ごとの内訳を持つ
-      //   { "2026-08-05": {hour, back, bonus} }
+      //   { "2026-08-05": {hour, back, bonus, soge, other, nippay} }
       byDate:{}});
 
   /* ★v10.5：その日の箱を取り出す。金額を足すときは必ずここにも足すこと。
      足し忘れると「日ごとの合計」と「期間の合計」がズレる → 下の自己検査で鳴る。 */
-  const bd = (c,d) => (c.byDate[d] = c.byDate[d] || {hour:0, back:0, bonus:0});
+  const bd = (c,d) => (c.byDate[d] = c.byDate[d] || {hour:0, back:0, bonus:0, soge:0, other:0, nippay:0});
 
   S.casts.forEach(g);
 
@@ -1782,6 +1914,23 @@ function aggregateLive(from,to){
     });
   });
 
+  /* --- ★v11 送迎費・その他控除・日払い（2026-08-28） ---
+     ★勤務時間とは**別のループ**にしてある。上のループは `!r.in || !r.out` で抜けるので、
+       同じループに相乗りさせると「出勤時間を打つ前に入れた控除が消える」。
+     ★金額の読み方は deductOf() 1本に集約（②の画面もここを通る）。 */
+  Object.keys(S.att).forEach(d=>{
+    if(!inRange(d,from,to)) return;
+    Object.keys(S.att[d]||{}).forEach(name=>{
+      const k = deductOf(d,name);
+      if(!k.soge && !k.other && !k.nippay) return;
+      const c = g(name);
+      c.soge += k.soge; if(k.soge) c.sogeN += 1;
+      c.other += k.other; c.nippay += k.nippay;
+      if(k.other && k.note) c.otherNotes.push({date:d, yen:k.other, note:k.note});
+      const x = bd(c,d); x.soge += k.soge; x.other += k.other; x.nippay += k.nippay;
+    });
+  });
+
   /* --- ★v10.3 ママの売上ボーナス ---
      達成した日にその額が乗る。ママが休んでいる日に達成しても付ける（店の売上に対するものなので）。
      ★ボーナスは back（バック計）には入れない。紙の様式でも「ボーナス」は
@@ -1794,15 +1943,24 @@ function aggregateLive(from,to){
 
   Object.values(A).forEach(c=>{
     c.back   = c.yuukyaku + c.drink + c.tequila + c.dohan + c.bottle;
-    c.payRaw = c.hour + c.back + c.bonus;            // 丸める前の日当（内訳の合計）
+    c.payRaw = c.hour + c.back + c.bonus;            // 丸める前の稼ぎ（内訳の合計）
     /* ★v10.5：**その日の日当ごとに丸めてから足す。**
-       ここを「全部足してから丸める」に書き換えないこと。お店は日ごとに丸めて払っている。 */
-    c.pay = 0;
+       ここを「全部足してから丸める」に書き換えないこと。お店は日ごとに丸めて払っている。
+       ★v11：丸めたあとの「稼ぎ」を payGross に置いた（＝v10.9までの pay）。
+         **控除を引く前**の額。丸めの注記や検査はこっちと突き合わせる。 */
+    c.payGross = 0;
     Object.keys(c.byDate).forEach(d=>{
       const x = c.byDate[d];
-      c.pay += roundPay(x.hour + x.back + x.bonus);
+      c.payGross += roundPay(x.hour + x.back + x.bonus);
     });
-    c.roundLoss = c.payRaw - c.pay;                  // 丸めで減った分（切り捨てなら0以上）
+    /* ★v11：日当 ＝ 丸めたあとの稼ぎ −（送迎 ＋ その他控除）
+       ★★**丸めてから引く**。逆にすると送迎が730円のような端数のとき額が変わる。
+       日当はマイナスにならない想定だが、止めない（控除が稼ぎを超える日は現実にありうる）。 */
+    c.pay = c.payGross - c.soge - c.other;
+    /* ★v11：差引 ＝ 日当 − 日払い。**これから渡す額**。★マイナスもそのまま出す
+       （日払いで渡しすぎた月は、月の合計で相殺される）。 */
+    c.net = c.pay - c.nippay;
+    c.roundLoss = c.payRaw - c.payGross;             // 丸めで減った分（切り捨てなら0以上）
 
     /* ★足し忘れの自己検査。
        日付ごとの箱の合計は、必ず「丸める前の日当」と一致していないといけない。
@@ -2038,9 +2196,10 @@ function renderSlipEditor(){
            ? '<div><label>他店の名前</label><input data-p="annaiOther" value="'+esc(sp.annaiOther)+'" placeholder="店名を入れてください"></div>'
            : "")
       : "")
-   +'<div class="narrow"><label>同伴</label><div style="padding:6px 0"><input type="checkbox" data-p="dohan"'+(sp.dohan?" checked":"")+'> <span class="muted">あり</span></div></div>'
-   +'<div><label>同伴したキャスト</label><select data-p="dohanCast"'+(sp.dohan?"":" disabled")+'>'+castOptions(sp.dohanCast,true,"（係と同じ）")+'</select></div>'
-   +'<div class="narrow"><label>支払い</label><select data-p="pay"><option value="cash"'+(sp.pay==="cash"?" selected":"")+'>現金</option><option value="card"'+(sp.pay==="card"?" selected":"")+'>カード</option></select></div>'
+   /* ★v11b：同伴と支払いはここから外した（2026-08-28 担当者さん指示）。
+      紙のお会計票では **同伴は明細に書かれ、支払いは一番下（お客様名のところ）**。
+      打つ人が紙を上から順に写せるように、画面もその場所へ移した。
+      ★data-p は変えていないので、保存の形も計算も1文字も変わっていない。 */
    +'</div>'
    +(sp.guests>0 && sp.kakari && sp.kakari!==ANNAI
       ? '<div class="msg info" style="margin-top:10px">誘客：'+esc(sp.kakari)+' に '+esc(sp.guests)+'人 × 500円 ＝ <b>'+yen(sp.guests*RATE.yuukyaku)+'円</b></div>'
@@ -2049,8 +2208,22 @@ function renderSlipEditor(){
       扱いはフリーと同じ＝誘客・係の売上はつかない。計算は aggregate() 側で行う */
    +'</div>'
 
-   +'<div class="card"><h2>明細</h2>'
+   +'<div class="card"><h2>明細 <span class="note">紙のお会計票の「品名」の欄。上から順に写せます</span></h2>'
    +blk("セット","3,500円／本","gl-set",["種類","本数","金額",""],setLines,"sets")
+   /* ★v11b：同伴（2026-08-28 担当者さん指示「同伴は伝票に書かれる。セットの下でいい」）。
+      ★blk() を使っていないのは、同伴が**行を足すもの**ではなく1枚に1つだからだけ。
+        見た目は他のブロックに揃えてある。 */
+   +'<div class="blk"><h3>同伴 <span class="tag">1,500円／件</span></h3>'
+   +'<div class="row" style="align-items:flex-end">'
+   +'<div class="narrow"><label>同伴</label><div style="padding:6px 0">'
+   +'<input type="checkbox" data-p="dohan"'+(sp.dohan?" checked":"")+'> <span class="muted">あり</span></div></div>'
+   +'<div><label>同伴したキャスト</label><select data-p="dohanCast"'+(sp.dohan?"":" disabled")+'>'
+   +castOptions(sp.dohanCast,true,"（係と同じ）")+'</select></div>'
+   +'</div>'
+   +(sp.dohan && !(sp.dohanCast||"").trim() && sp.kakari && sp.kakari!==ANNAI
+      ? '<div class="muted" style="font-size:11px;margin-top:4px">相手を選ばないと、係の「'
+        +esc(sp.kakari)+'」さんに 1,500円 がつきます</div>' : '')
+   +'</div>'
    +blk("ボトル","(売値−原価)×20% がバック","gl-bot",["銘柄","売値","本数","金額",""],botLines,"bottles")
    +blk("キャストドリンク","1,500円／杯・バック300円","gl-drk",["飲んだキャスト","杯数","金額",""],drkLines,"drinks")
    +blk("その他","キャスト欄が空＝客用／名前を入れるとキャスト用の単価に切り替わります","gl-oth",["品名","キャスト","数量","金額",""],othLines,"others")
@@ -2066,6 +2239,15 @@ function renderSlipEditor(){
    +'<div class="total-line"><span class="lbl">明細合計（税抜）</span><span>'+yen(a.sub)+' 円</span></div>'
    +'<div class="total-line"><span class="lbl">現金（明細合計 ×1.1 → 100円切上）</span><span>'+yen(a.cash)+' 円</span></div>'
    +'<div class="total-line"><span class="lbl">カード（現金額 ×1.1 → 100円切上）</span><span>'+yen(a.card)+' 円</span></div>'
+   /* ★v11b：支払いはここ（2026-08-28 担当者さん指示「紙の伝票のお客様名のところに配置して」）。
+      紙では一番下が「◯◯様 → 税込合計金額」の並び。その場所に置いた。
+      ★どちらを選んだかで下の「お会計」の額が変わるので、隣にあるほうが読める。
+        ヘッダー（画面のいちばん上）にあったときは、会計から遠くて結び付かなかった。 */
+   +'<div class="total-line" style="align-items:center">'
+   +'<span class="lbl">支払い</span>'
+   +'<span><select data-p="pay" style="width:auto;min-width:120px">'
+   +'<option value="cash"'+(sp.pay==="cash"?" selected":"")+'>現金</option>'
+   +'<option value="card"'+(sp.pay==="card"?" selected":"")+'>カード</option></select></span></div>'
    +'<div class="total-line big"><span>お会計（'+(sp.pay==="card"?"カード":"現金")+'）</span><span>'+yen(a.total)+' 円</span></div>'
    +'</div></div>';
 
@@ -2232,6 +2414,31 @@ function castsInSlips(date){
   });
   return set;
 }
+/* ★v11：送迎費・その他控除・日払いの1段（2026-08-28）
+   ・**その日・その人**の額を入れる。金額の読み方は deductOf() 1本（集計と同じ道）。
+   ・右端に、この人のこの日の **日当 と 差引** をその場で出す。
+     打った瞬間に効いたことが見えないと、入れたのか分からなくなるため。
+   ・★日当・差引は自分で足し算していない。**aggregate(d,d) から借りている。**
+     ここで計算を書き起こすと、④締め・給与と額が食い違う道ができる（⑦カレンダーと同じ考え方）。 */
+function attDedHTML(date, name){
+  const k = deductOf(date, name);
+  const a = (aggregate(date,date).casts||{})[name];
+  const pay = a ? a.pay : 0, net = a ? a.net : 0;
+  const money = (key, val, ph) =>
+    '<input type="text" inputmode="numeric" placeholder="'+ph+'" '
+    +'data-ded="'+esc(name)+'|'+key+'" value="'+(val ? val : "")+'">';
+  return '<div class="att-ded">'
+    +'<div class="g"><label><input type="checkbox" data-ded="'+esc(name)+'|soge"'
+      +(k.soge?" checked":"")+'>送迎</label>'
+      + money("sogeYen", k.soge, String(sogeBase())) +'円</div>'
+    +'<div class="g">その他控除 '+ money("other", k.other, "0") +'円'
+      +'<input type="text" class="note" placeholder="理由（例：制服代）" '
+        +'data-ded="'+esc(name)+'|otherNote" value="'+esc(k.note)+'"></div>'
+    +'<div class="g">日払い '+ money("nippay", k.nippay, "0") +'円</div>'
+    +'<div class="res">日当 '+(pay<0?'<span class="minus">−'+yen(-pay)+'</span>':yen(pay))+'円'
+      +' ／ 差引 '+(net<0?'<span class="minus">−'+yen(-net)+'</span>':yen(net))+'円</div>'
+    +'</div>';
+}
 function renderAtt(){
   const d = document.getElementById("attDate").value || todayStr();
   S.att[d] = S.att[d] || {};
@@ -2279,7 +2486,9 @@ function renderAtt(){
         +'data-att="'+esc(name)+'|out" value="'+esc(r.out)+'">'
         +(isNextDay(r.in,r.out)
            ? '<div class="muted" style="font-size:11px">翌日の '+esc(r.out)+'</div>' : '')+'</div>'
-      +'<div data-l="勤務時間" style="align-self:center">'+info+'</div></div>';
+      +'<div data-l="勤務時間" style="align-self:center">'+info+'</div>'
+      + attDedHTML(d, name)      // ★v11：送迎費・その他控除・日払いの段
+      +'</div>';
   }).join("");
   // 手で足した人を一覧から外す（選び間違えたとき用。キャストの登録自体は消さない）
   box.querySelectorAll("[data-attrm]").forEach(el=>el.onclick=()=>{
@@ -2289,6 +2498,33 @@ function renderAtt(){
         +"※⑤設定のキャスト登録は消えません。")) return;
     delete day[n]; save(); renderAtt();
   });
+  /* ★v11：送迎・その他控除・日払いの配線。
+     ・送迎のチェックを入れた瞬間に**基本額を入れる**（打つ手をひとつ減らす）。
+       すでに金額が入っているときは上書きしない（距離で直した額を消さないため）。
+     ・金額は0以上の整数だけ。読めない書き方は0にせず、直す前の値に戻して知らせる。 */
+  box.querySelectorAll("[data-ded]").forEach(el=>el.addEventListener("change",()=>{
+    const [n,k] = el.dataset.ded.split("|");
+    const row = day[n] = day[n] || {in:"",out:""};
+    if(k==="soge"){
+      row.soge = el.checked;
+      if(el.checked && !(+row.sogeYen>0)) row.sogeYen = sogeBase();   // 初期値を入れる
+    }else if(k==="otherNote"){
+      row.otherNote = (el.value||"").trim();
+    }else{
+      const raw = (el.value||"").trim().replace(/[,，\s円]/g,"");
+      if(raw===""){ row[k] = 0; }
+      else{
+        const v = Math.round(+raw);
+        if(!isFinite(v) || v<0){
+          alert("金額は0以上の数字で入れてください（打った内容：「"+el.value+"」）。");
+          renderAtt(); return;
+        }
+        row[k] = v;
+        if(k==="sogeYen" && v>0) row.soge = true;   // 額を直したら「有」も付ける
+      }
+    }
+    save(); renderAtt(); renderPay(); renderCal();
+  }));
   box.querySelectorAll("[data-att]").forEach(el=>el.addEventListener("change",()=>{
     const [n,k]=el.dataset.att.split("|");
     day[n]=day[n]||{in:"",out:""};
@@ -2468,15 +2704,30 @@ function renderPay(){
       + '<b>達成した日の日当に自動で乗ります</b>。入れるまでボーナスは0円のままです。</div>';
   }
 
+  /* ★★v11：カードの大きい数字は **差引（これから渡す額）**。
+     ここを日当のままにすると、**日払いで渡したぶんを二重に払う**。
+     見出しが「この期間に払う金額」なので、日払いを引いた額でないと嘘になる。
+     （④の「全期間」で締めた額と違う金額が出ていたのと同じ性質の事故。2026-08-22の教訓） */
+  const yenNeg = v => v<0 ? '<span class="minus">−'+yen(-v)+'</span>' : yen(v);
   document.getElementById("paySummary").innerHTML = (list.length
     ? '<div class="pay-cards">'+list.map(c=>
         '<div class="pay-card"><div class="who">'+esc(c.name)+'</div>'
-        +'<div class="n">'+yen(c.pay)+'<span style="font-size:13px;font-weight:600"> 円</span></div>'
+        +'<div class="n">'+yenNeg(c.net)+'<span style="font-size:13px;font-weight:600"> 円</span></div>'
         +'<div class="muted" style="font-size:11px">時給分 '+yen(c.hour)+' ＋ バック '+yen(c.back)
-        + (c.bonus ? ' ＋ <b>ボーナス '+yen(c.bonus)+'</b>' : '')+'</div>'
+        + (c.bonus ? ' ＋ <b>ボーナス '+yen(c.bonus)+'</b>' : '')
+        + (c.soge  ? ' − 送迎 '+yen(c.soge) : '')
+        + (c.other ? ' − 他控除 '+yen(c.other) : '')
+        + ((c.soge||c.other) ? ' ＝ <b>日当 '+yen(c.pay)+'</b>' : '')
+        + (c.nippay ? ' − <b>日払い '+yen(c.nippay)+'</b>' : '')+'</div>'
+        + (c.net<0 ? '<div class="muted" style="font-size:11px;color:#c0392b;font-weight:700">'
+                    +'※日払いのほうが多い月です（渡しすぎたぶん）</div>' : '')
         +'<button class="btn mini" data-slip="'+esc(c.name)+'" style="margin-top:7px;width:100%">📄 給与明細を発行</button>'
         +'</div>').join("")
-      +'</div><div class="total-line big" style="margin-top:10px"><span>支給 合計</span><span>'+yen(sum(list,"pay"))+' 円</span></div>'
+      +'</div><div class="total-line big" style="margin-top:10px"><span>支給 合計'
+      + (list.some(c=>c.nippay||c.soge||c.other)
+          ? '<span class="muted" style="font-size:11px;font-weight:400">（日当 '+yen(sum(list,"pay"))
+            +'円 − 日払い '+yen(sum(list,"nippay"))+'円）</span>' : '')
+      +'</span><span>'+yenNeg(sum(list,"net"))+' 円</span></div>'
     : '<div class="muted">この期間のデータがありません。</div>') + bhtml;
 
   document.querySelectorAll("#paySummary [data-slip]").forEach(el=>
@@ -2487,12 +2738,19 @@ function renderPay(){
   else{
     // ★v10.3：ボーナスの段が入っているときだけ列を足す（入っていない店では今まで通りの表）
     const bcol = bonusActive();
+    /* ★v11：送迎費・その他控除・日払いが**この期間に1件でもあるときだけ**列を足す。
+       無い店・無い月では、いままでと1列も変わらない表のまま。 */
+    const dcol = list.some(c=> c.soge || c.other || c.nippay);
+    const neg  = v => v<0 ? '<span class="minus">−'+yen(-v)+'</span>' : yen(v);
     t.innerHTML =
       '<tr><th>キャスト</th><th class="n">勤務(実)</th><th class="n">30分切捨</th><th class="n">時給分</th>'
       +'<th class="n">誘客</th><th class="n">キャスドリ</th><th class="n">テキーラ</th><th class="n">同伴</th>'
       +'<th class="n">ボトル</th><th class="n">バック計</th>'
       +(bcol?'<th class="n">ボーナス</th>':'')
-      +'<th class="n">給料</th></tr>'
+      +(dcol?'<th class="n">送迎</th><th class="n">他控除</th>':'')
+      +'<th class="n">'+(dcol?'日当':'給料')+'</th>'
+      +(dcol?'<th class="n">日払い</th><th class="n">差引<div class="muted" style="font-size:10px;font-weight:400">渡す額</div></th>':'')
+      +'</tr>'
       + list.map(c=>'<tr><td><b>'+esc(c.name)+'</b></td>'
         +'<td class="n">'+(c.min?hhmm(c.min):"—")+'</td>'
         +'<td class="n">'+(c.min?hhmm(c.minPaid):"—")+'</td>'
@@ -2504,22 +2762,36 @@ function renderPay(){
         +'<td class="n">'+yen(c.bottle)+'</td>'
         +'<td class="n">'+yen(c.back)+'</td>'
         +(bcol?'<td class="n">'+(c.bonus?'<b>'+yen(c.bonus)+'</b>':'—')+'</td>':'')
-        +'<td class="n"><b style="font-size:15px">'+yen(c.pay)+'</b></td></tr>').join("")
+        +(dcol?'<td class="n">'+(c.soge ?'−'+yen(c.soge) :'—')+'</td>'
+              +'<td class="n">'+(c.other?'−'+yen(c.other):'—')+'</td>':'')
+        +'<td class="n"><b style="font-size:15px">'+neg(c.pay)+'</b></td>'
+        +(dcol?'<td class="n">'+(c.nippay?'−'+yen(c.nippay):'—')+'</td>'
+              +'<td class="n"><b style="font-size:15px">'+neg(c.net)+'</b></td>':'')
+        +'</tr>').join("")
       + '<tr><th>合計</th><th></th><th></th><th class="n">'+yen(sum(list,"hour"))+'</th>'
         +'<th class="n">'+yen(sum(list,"yuukyaku"))+'</th><th class="n">'+yen(sum(list,"drink"))+'</th>'
         +'<th class="n">'+yen(sum(list,"tequila"))+'</th><th class="n">'+yen(sum(list,"dohan"))+'</th>'
         +'<th class="n">'+yen(sum(list,"bottle"))+'</th><th class="n">'+yen(sum(list,"back"))+'</th>'
         +(bcol?'<th class="n">'+yen(sum(list,"bonus"))+'</th>':'')
-        +'<th class="n">'+yen(sum(list,"pay"))+'</th></tr>';
+        +(dcol?'<th class="n">−'+yen(sum(list,"soge"))+'</th><th class="n">−'+yen(sum(list,"other"))+'</th>':'')
+        +'<th class="n">'+neg(sum(list,"pay"))+'</th>'
+        +(dcol?'<th class="n">−'+yen(sum(list,"nippay"))+'</th>'
+              +'<th class="n">'+neg(sum(list,"net"))+'</th>':'')
+        +'</tr>';
   }
 
   const st = document.getElementById("salesTable");
   let cash=0, card=0, sub=0;
   R.slips.forEach(s=>{ const a=accounting(s); sub+=a.sub; if(s.pay==="card") card+=a.total; else cash+=a.total; });
   st.innerHTML =
-    '<tr><th>キャスト</th><th class="n">個人売上</th></tr>'
-    + list.map(c=>'<tr><td>'+esc(c.name)+'</td><td class="n">'+yen(c.sales)+'</td></tr>').join("")
-    + '<tr><th>キャストにつく売上 合計</th><th class="n">'+yen(sum(list,"sales"))+'</th></tr>'
+    /* ★v11d：個人売上は**税込**で出す（2026-08-28 担当者さん指示）。
+       ★1人ずつ丸めて、合計はそれを足す（表の縦計が必ず合うほうを取る）。
+       ★下の「伝票の明細合計（税抜）」はそのまま残す。基準が違う数字が並ぶので、
+         見出しに税抜・税込をはっきり書いておくこと。 */
+    '<tr><th>キャスト</th><th class="n">個人売上（税込）</th></tr>'
+    + list.map(c=>'<tr><td>'+esc(c.name)+'</td><td class="n">'+yen(salesTaxed(c.sales))+'</td></tr>').join("")
+    + '<tr><th>キャストにつく売上 合計（税込）</th><th class="n">'
+      + yen(list.reduce((t,c)=>t+salesTaxed(c.sales),0))+'</th></tr>'
     + '<tr><td class="muted">伝票の明細合計（税抜）</td><td class="n">'+yen(sub)+'</td></tr>'
     + '<tr><td class="muted">お会計 現金 ／ カード</td><td class="n">'+yen(cash)+' ／ '+yen(card)+'</td></tr>'
     + '<tr><td class="muted">伝票枚数</td><td class="n">'+R.slips.length+' 枚</td></tr>';
@@ -2561,7 +2833,13 @@ function renderLockBox(from,to,R){
     });
     h += '<div class="msg '+(diff.length?"ng":"ok")+'">'
       + '<b>🔒 '+esc(L.label)+' は締め済みです</b>　<span class="muted">'+esc(lockAtLabel(L))+' に締め</span><br>'
-      + '支給 合計 <b>'+yen(L.total)+'円</b>。この期間の伝票・出勤時間は編集できません。<br>'
+      /* ★v11：締めた控えに netTotal があればそれを出す（＝実際に渡した額）。
+         v10.9以前に締めた控えには無いので、そのときは total（日当合計）のまま。
+         その時代には日払いが存在しないので、額としては同じ。 */
+      + '支給 合計 <b>'+yen(L.netTotal!=null ? L.netTotal : L.total)+'円</b>'
+      + (L.netTotal!=null && L.netTotal!==L.total
+          ? '<span class="muted" style="font-size:11px">（日当 '+yen(L.total)+'円 から日払いを引いた額）</span>' : '')
+      + '。この期間の伝票・出勤時間は編集できません。<br>'
       + 'あとから原価・丸め・ボーナスを直しても、<b>この期間の金額は動きません</b>'
       + '（締めたときの設定で計算しています）。'
       + (L.prev ? '<br><span class="muted">前に締めたとき '+yen(L.prev.total)+'円 → 今回 '+yen(L.total)+'円'
@@ -2662,8 +2940,17 @@ const SHEET_COLS = [
   // ★v10.3：ボーナス列を生かした（2026-08-16）。紙にもともとある列で、いままで空欄だった。
   //   ⑤設定でママのボーナスの段を入れるまでは、いままで通り空欄のまま（bonusActive() で判定）
   {k:"bonus", label:"ボーナス", w:"wmoney"},
+  /* ★v11：送迎費・その他控除・日払い・差引（2026-08-28 担当者さん指示）
+     並びは「引く前 → 引くもの → 日当 → 渡した分 → 差引」。
+     ★日当（nitto）は**送迎とその他控除を引いたあとの額**。
+       日払いは日当に混ぜず、そのうしろで引く（A案）。 */
+  {k:"soge",  label:"送迎",     w:"wmoney"},
+  {k:"other", label:"他控除",   w:"wmoney"},
   {k:"nitto", label:"日当",     w:"wmoney"},
-  {k:"sales", label:"個人売上", w:"wmoney"},
+  {k:"nippay",label:"日払い",   w:"wmoney"},
+  {k:"sashihiki", label:"差引", w:"wmoney"},
+  /* ★v11d：紙に出すのは**税込**（2026-08-28 担当者さん指示）。税抜の sales は検査用に残してある */
+  {k:"salesTax", label:"個人売上", w:"wmoney"},
   // ★v10.1：値引きの列は外した（2026-08-06 担当者さん指示）。紙には枠があるが使っていない
 ];
 const DOW = ["日","月","火","水","木","金","土"];
@@ -2702,7 +2989,19 @@ function sheetRow(name, date){
     nitto : a ? a.pay : 0,
     // ★v10.5：丸める前の日当。紙の「内訳の合計」と突き合わせるために要る
     nittoRaw : a ? a.payRaw : 0,
+    // ★v11：丸めたあと・控除する前の稼ぎ。丸めの断り書きはこれと突き合わせる
+    //   （控除後の日当と比べると、送迎のぶんだけ必ずズレて誤って鳴る）
+    nittoGross : a ? a.payGross : 0,
+    soge  : a ? a.soge : 0,
+    other : a ? a.other : 0,
+    nippay: a ? a.nippay : 0,
+    sashihiki : a ? a.net : 0,
     sales : a ? a.sales : 0,
+    /* ★v11d：税込の個人売上。**日ごとに丸めて、合計はそれを足す。**
+       期間まとめて×1.1したのと数円ズレることがあるが、
+       **画面に出ている数字どうしの縦計は必ず合う**ほうを取る（ズレは事故に見えるため）。
+       ズレの検査（下の alerts）は税抜の sales でやっているので、そちらは丸めの影響を受けない。 */
+    salesTax : a ? salesTaxed(a.sales) : 0,
     // 下の集計ボックスは「実際に払うバック額」を出す（杯数×単価で出すとテキーラでズレる）
     hourPay   : a ? a.hour : 0,
     dohanBack : a ? a.dohan : 0,
@@ -2728,13 +3027,16 @@ function sheetHTML(name, from, to){
   const T = rows.reduce((t,r)=>({
     attend:t.attend+r.attend, hours:t.hours+r.hours, dohan:t.dohan+r.dohan,
     yuu:t.yuu+r.yuu, d:t.d+r.d, keep:t.keep+r.keep, hojo:t.hojo+r.hojo,
-    nitto:t.nitto+r.nitto, nittoRaw:t.nittoRaw+r.nittoRaw,
-    sales:t.sales+r.sales, bottleBack:t.bottleBack+r.bottleBack,
+    nitto:t.nitto+r.nitto, nittoRaw:t.nittoRaw+r.nittoRaw, nittoGross:t.nittoGross+r.nittoGross,
+    soge:t.soge+r.soge, other:t.other+r.other, nippay:t.nippay+r.nippay,
+    sashihiki:t.sashihiki+r.sashihiki,
+    sales:t.sales+r.sales, salesTax:t.salesTax+r.salesTax, bottleBack:t.bottleBack+r.bottleBack,
     hourPay:t.hourPay+r.hourPay, dohanBack:t.dohanBack+r.dohanBack,
     yuuBack:t.yuuBack+r.yuuBack, dBack:t.dBack+r.dBack, tequilaN:t.tequilaN+r.tequilaN,
     bonus:t.bonus+r.bonus
-  }), {attend:0,hours:0,dohan:0,yuu:0,d:0,keep:0,hojo:0,nitto:0,nittoRaw:0,sales:0,bottleBack:0,
-       hourPay:0,dohanBack:0,yuuBack:0,dBack:0,tequilaN:0,bonus:0});
+  }), {attend:0,hours:0,dohan:0,yuu:0,d:0,keep:0,hojo:0,nitto:0,nittoRaw:0,nittoGross:0,sales:0,salesTax:0,bottleBack:0,
+       hourPay:0,dohanBack:0,yuuBack:0,dBack:0,tequilaN:0,bonus:0,
+       soge:0,other:0,nippay:0,sashihiki:0});
 
   /* ★v10.3：使っていない列（見出しがオレンジ）の判定。
      ボーナス列だけは「⑤設定に段が入っているか」で変わるので、ここで見る */
@@ -2747,10 +3049,29 @@ function sheetHTML(name, from, to){
     const v = r[c.k];
     if(v==null || v===0) return "";
     if(c.k==="hours") return (Math.round(v*10)/10);
-    if(c.k==="nitto"||c.k==="sales"||c.k==="keep"||c.k==="bonus") return yen(v);
+    /* ★v11：送迎・他控除・日払いは**引くもの**なので頭に − を付ける。
+       差引はマイナスになりうるので赤で出す（0円と見分けがつかないと事故る）。 */
+    if(c.k==="soge"||c.k==="other"||c.k==="nippay") return "−"+yen(v);
+    if(c.k==="sashihiki") return v<0 ? '<span class="minus">−'+yen(-v)+'</span>' : yen(v);
+    if(c.k==="nitto"||c.k==="salesTax"||c.k==="keep"||c.k==="bonus") return yen(v);
     return v;
   };
-  const colgroup = '<colgroup>'+SHEET_COLS.map(c=>'<col class="'+c.w+'">').join("")+'</colgroup>';
+  /* ★v11e（2026-08-28 担当者さん「見切れてるね」）：列幅を**割合（％）で出す**。
+     ★★もとは CSS の px 固定（wday 26px / wnum 38px / wmoney 56px）だった。
+       列がいくつあっても各列がその px を主張するので、**列が増えると表が箱を突き破る**。
+       v11 で送迎・他控除・日払い・差引の4列を足したとき、まさにそれが起きていた
+       （箱の右端 1,215px に対して最後のセルの右端が 1,232px。個人売上の列が切れていた）。
+     ★★**印刷でも同じだけ切れる。** `body.printing` の font-size は効くが、
+       col の px 幅は変わらないため。給与明細は紙で渡すので、ここは画面より紙のほうが重い。
+     → 重みの合計に対する割合にする。**列が何本になっても合計100％で必ず収まる。**
+       見た目の比率（日付は細く、金額は太く）はいままでと同じ。 */
+  /* ★比率としてだけ使う。pxではない。
+     ★wday が 26 だと見出しの「曜日」が1文字ぶん切れる（px固定のころは
+       表があふれていたぶん実際には広く出ていて、気づけなかった）。32にして入るようにした。 */
+  const COLW = {wday:32, wnum:38, wmoney:56};
+  const wSum = SHEET_COLS.reduce((t,c)=>t+(COLW[c.w]||38), 0);
+  const colgroup = '<colgroup>'+SHEET_COLS.map(c=>
+      '<col class="'+c.w+'" style="width:'+((COLW[c.w]||38)/wSum*100).toFixed(3)+'%">').join("")+'</colgroup>';
   const head = '<tr>'+SHEET_COLS.map(c=>'<th'+(unkCol(c)?' class="unk"':'')+'>'+esc(c.label)+'</th>').join("")+'</tr>';
   const body = rows.map(r=>'<tr'+(r.attend?'':' class="off"')+'>'
       +SHEET_COLS.map(c=>'<td>'+cell(r,c)+'</td>').join("")+'</tr>').join("");
@@ -2758,7 +3079,10 @@ function sheetHTML(name, from, to){
     if(c.k==="day"||c.k==="dow") return "";
     if(unkCol(c)) return "0";
     if(c.k==="hours") return Math.round(T.hours*10)/10;
-    if(c.k==="nitto"||c.k==="sales"||c.k==="keep"||c.k==="bonus") return yen(T[c.k]);
+    if(c.k==="soge"||c.k==="other"||c.k==="nippay") return T[c.k] ? "−"+yen(T[c.k]) : "0";
+    if(c.k==="sashihiki") return T.sashihiki<0
+      ? '<span class="minus">−'+yen(-T.sashihiki)+'</span>' : yen(T.sashihiki);
+    if(c.k==="nitto"||c.k==="salesTax"||c.k==="keep"||c.k==="bonus") return yen(T[c.k]);
     return T[c.k]!=null ? T[c.k] : "";
   };
   const tot  = '<tr class="tot">'+SHEET_COLS.map(c=>'<td>'+totCell(c)+'</td>').join("")+'</tr>';
@@ -2775,8 +3099,10 @@ function sheetHTML(name, from, to){
   const half = (from&&to) ? (from.slice(8,10)==="01" ? "前期" : "後期") : "";
   const ym   = from ? (+from.slice(5,7))+"月" : "";
   const store= (S.store&&S.store.name) ? S.store.name : "";
-  // 対比＝売上に対する人件費（担当者さん確認：日当合計 ÷ 個人売上合計）
-  const hiritsu = T.sales>0 ? Math.round(T.nitto/T.sales*100) : null;
+  /* 対比＝売上に対する人件費（担当者さん確認：日当合計 ÷ 個人売上合計）
+     ★v11d：分母は**税込**の個人売上（2026-08-28 担当者さん判断「税込で揃える」）。
+       分母が増えるので率は下がる（例：48％ → 44％）。画面に出ている数字と基準が揃う。 */
+  const hiritsu = T.salesTax>0 ? Math.round(T.nitto/T.salesTax*100) : null;
   // 下の集計ボックスの合計は、必ず日当合計と一致していないといけない
   // ★v10.3：ボーナスも日当に乗るので、ここにも足さないと検査が誤って鳴る
   const boxSum = T.hourPay + T.dohanBack + T.yuuBack + T.dBack + T.bottleBack + T.bonus;
@@ -2816,6 +3142,24 @@ function sheetHTML(name, from, to){
     //   月またぎ・期間の端の取りこぼしがあればここで鳴る
     if(T.bonus !== C.bonus)
       alerts.push('日ごとに足したボーナス ¥'+yen(T.bonus)+' と、期間まとめての ¥'+yen(C.bonus)+' が違います。');
+    /* ★v11：送迎費・その他控除・日払い・差引も同じ2つの道で突き合わせる。
+       ここが無いと、控除の取りこぼしが**渡す額のズレとして静かに出る**。 */
+    if(T.soge !== C.soge)
+      alerts.push('日ごとに足した送迎費 ¥'+yen(T.soge)+' と、期間まとめての ¥'+yen(C.soge)+' が違います。');
+    if(T.other !== C.other)
+      alerts.push('日ごとに足したその他控除 ¥'+yen(T.other)+' と、期間まとめての ¥'+yen(C.other)+' が違います。');
+    if(T.nippay !== C.nippay)
+      alerts.push('日ごとに足した日払い ¥'+yen(T.nippay)+' と、期間まとめての ¥'+yen(C.nippay)+' が違います。');
+    if(T.sashihiki !== C.net)
+      alerts.push('日ごとに足した差引 ¥'+yen(T.sashihiki)+' と、期間まとめての ¥'+yen(C.net)+' が違います。');
+    /* ★★式そのものの検査。「日当＝丸めた稼ぎ−(送迎+他控除)」「差引＝日当−日払い」が
+       どこかで崩れていないかを、足し算の道とは別に確かめる。 */
+    if(C.pay !== C.payGross - C.soge - C.other)
+      alerts.push('日当の式が合っていません（丸めた稼ぎ ¥'+yen(C.payGross)+' −送迎 ¥'+yen(C.soge)
+                 +' −他控除 ¥'+yen(C.other)+' ＝ ¥'+yen(C.pay)+' のはずです）。');
+    if(C.net !== C.pay - C.nippay)
+      alerts.push('差引の式が合っていません（日当 ¥'+yen(C.pay)+' −日払い ¥'+yen(C.nippay)
+                 +' ＝ ¥'+yen(C.net)+' のはずです）。');
   }else if(T.nitto!==0 || T.sales!==0){
     alerts.push('期間をまとめて計算したほうに、このキャストが出てきません。');
   }
@@ -2868,9 +3212,22 @@ function sheetHTML(name, from, to){
     +'<table class="box"><tbody><tr>'
     +'<td class="lbl" style="width:auto">日当 合計</td>'
     +'<td class="num" style="font-size:15px;font-weight:700">¥'+yen(T.nitto)+'</td>'
-    +'<td class="lbl" style="width:auto">個人売上<span style="font-size:9px">※確認中</span></td><td class="num">¥'+yen(T.sales)+'</td>'
+    +'<td class="lbl" style="width:auto">個人売上<span style="font-size:9px">税込・※確認中</span></td><td class="num">¥'+yen(T.salesTax)+'</td>'
     +'<td class="lbl" style="width:auto">対比<span style="font-size:9px">※確認中</span></td><td class="num">'+(hiritsu==null?"—":hiritsu+"％")+'</td>'
     +'</tr></tbody></table>'
+    /* ★v11：控除の行。**1件も無い期間には出さない**（使っていない欄を並べても迷うだけ）。
+       日当はすでに送迎・他控除を引いたあとの額なので、ここでは「内訳」として見せている。
+       最後の差引が**これから渡す額**。マイナスもそのまま出す。 */
+    + ((T.soge||T.other||T.nippay)
+        ? '<table class="box" style="margin-top:6px"><tbody><tr>'
+          +'<td class="lbl" style="width:auto">送迎</td><td class="num">−¥'+yen(T.soge)+'</td>'
+          +'<td class="lbl" style="width:auto">他控除</td><td class="num">−¥'+yen(T.other)+'</td>'
+          +'<td class="lbl" style="width:auto">日払い</td><td class="num">−¥'+yen(T.nippay)+'</td>'
+          +'<td class="lbl" style="width:auto"><b>差引（渡す額）</b></td>'
+          +'<td class="num" style="font-size:15px;font-weight:700">'
+            +(T.sashihiki<0 ? '<span class="minus">−¥'+yen(-T.sashihiki)+'</span>' : '¥'+yen(T.sashihiki))
+          +'</td></tr></tbody></table>'
+        : '')
     + alerts.map(m=>'<div class="msg ng" style="margin-top:8px;font-size:12px">'+esc(m)
         +' 開発元に知らせてください。</div>').join("")
     +'<div class="meta" style="margin-top:8px;color:#777">'
@@ -2882,14 +3239,39 @@ function sheetHTML(name, from, to){
     +'<b>テキーラは1杯をドリンク'+TEQUILA_AS_DRINKS+'杯として数えます</b>（バックが'+yen(RATE.tequila)+'円のため）。<br>'
     +'※keep＝ボトルの「売値−原価」。その'+Math.round(RATE.bottle*100)+'％がバック。<br>'
     +'※補助＝出勤した日に1（金額には効きません）。<br>'
-    +'※対比＝日当合計 ÷ 個人売上（売上に対する人件費）。<br>'
+    /* ★v11d：税込にしたことを必ず書く。書かないと「伝票の合計と合わない」と見える
+       （伝票の明細合計は税抜。ここは×1.1したもの） */
+    +'※<b>個人売上・対比は税込</b>（明細の合計×1.1）。伝票の「小計」は税抜なので額が違います。<br>'
+    +'※対比＝日当合計 ÷ 個人売上（税込）（売上に対する人件費）。<br>'
+    /* ★v11：控除の断り書き。**式をそのまま書く。**
+       これが無いと「内訳を足しても日当に合わない」と見える（丸めのときと同じ罠）。 */
+    + ((T.soge||T.other||T.nippay)
+        ? '※<b>日当</b>＝時給分＋バック＋ボーナス −（送迎＋他控除）。'
+          +'<b>差引</b>＝日当 − 日払い（<b>これから渡す額</b>）。<br>'
+          + (T.soge ? '※送迎＝'+ (function(){
+              var n=0; rows.forEach(function(r){ if(r.soge) n++; }); return n;
+            })() +'日ぶん 合計'+yen(T.soge)+'円（日によって額が違うことがあります）。<br>' : '')
+          + (T.nippay ? '※<b>日払いは、その日にもう渡したお金</b>です。'
+                       +'日当から引いているのではなく、渡す額から差し引いています。<br>' : '')
+        : '')
+    /* ★v11：その他控除の理由。金額だけだと来月「これ何？」になるので必ず添える */
+    + ((C && C.otherNotes && C.otherNotes.length)
+        ? '※<b>その他控除の中身</b>：'
+          + C.otherNotes.map(function(x){
+              return '<b>'+(+x.date.slice(5,7))+'/'+(+x.date.slice(8,10))+'</b> '
+                     + yen(x.yen)+'円（'+esc(x.note)+'）';
+            }).join(' ／ ') + '<br>'
+        : '')
     /* ★v10.5：丸めの断り書き。これが無いと「内訳を足しても日当に合わない」と見える */
     + (roundActive()
-        ? '※<b>日当は'+yen(roundUnit())+'円未満を'+roundModeLabel()+'ています</b>（その日ごと）。'
-          + (T.nittoRaw!==T.nitto
+        ? '※<b>'+((T.soge||T.other)?'稼ぎ（送迎・控除を引く前）は':'日当は')
+          +yen(roundUnit())+'円未満を'+roundModeLabel()+'ています</b>（その日ごと）。'
+          /* ★v11：比べる相手を nittoGross（＝丸めたあと・控除する前）にした。
+             控除後の日当と比べると、送迎のぶんだけ必ずズレて「丸めで減った」と嘘の説明が出る。 */
+          + (T.nittoRaw!==T.nittoGross
               ? 'この期間の内訳の合計は '+yen(T.nittoRaw)+'円 で、'
-                + (T.nittoRaw>T.nitto ? '差の '+yen(T.nittoRaw-T.nitto)+'円 が' + roundModeLabel() + 'られています。'
-                                      : '差の '+yen(T.nitto-T.nittoRaw)+'円 が足されています。')
+                + (T.nittoRaw>T.nittoGross ? '差の '+yen(T.nittoRaw-T.nittoGross)+'円 が' + roundModeLabel() + 'られています。'
+                                      : '差の '+yen(T.nittoGross-T.nittoRaw)+'円 が足されています。')
               : 'この期間は端数が出ていないため、内訳の合計と同じです。')
           +'<br>'
         : '')
@@ -3091,9 +3473,16 @@ function renderSet(){
   const rmEl = document.getElementById("roundMode");
   if(document.activeElement!==rmEl) rmEl.value = roundConf().mode || "floor";
   document.getElementById("roundInfo").innerHTML = roundActive()
-    ? 'いまの設定：その日の日当を <b>'+yen(roundUnit())+'円単位で'+roundModeLabel()+'</b>ます。'
+    ? 'いまの設定：その日の稼ぎを <b>'+yen(roundUnit())+'円単位で'+roundModeLabel()+'</b>ます'
+      +'（送迎・その他控除は、そのあとで引きます）。'
       +'<br>例：4,333円 → <b>'+yen(roundPay(4333))+'円</b>　／　4,336円 → <b>'+yen(roundPay(4336))+'円</b>'
     : '<b>丸めません。</b>1円単位のまま出します。';
+
+  /* ---------- ★v11 送迎費の基本額 ---------- */
+  const sbEl = document.getElementById("sogeBase");
+  if(document.activeElement!==sbEl) sbEl.value = sogeBase();
+  document.getElementById("sogeInfo").innerHTML =
+    '②で送迎に印を付けると <b>'+yen(sogeBase())+'円</b> が入ります';
 
   /* ---------- キャストドリンク単価 ---------- */
   const dp = document.getElementById("mDrinkPrice");
@@ -3270,6 +3659,17 @@ function wireMasterEditors(){
       S.round.unit = (n==null ? 0 : n);
     });
   }
+  /* ★v11 送迎費の基本額（静的な欄なので配線は1回だけ） */
+  const sbEl = document.getElementById("sogeBase");
+  if(sbEl && !sbEl.dataset.wired){
+    sbEl.dataset.wired="1"; sbEl.dataset.num="1";
+    wireMasterField(sbEl, v=>{
+      let n = masterNum(v);
+      if(n!=null && n<0){ alert("マイナスの数は入れられません。"); n = null; sbEl.value = ""; }
+      if(!S.deduct) S.deduct = defaultDeduct();
+      S.deduct.sogeBase = (n==null ? 0 : n);
+    });
+  }
   const rmEl = document.getElementById("roundMode");
   if(rmEl && !rmEl.dataset.wired){
     rmEl.dataset.wired="1";
@@ -3443,7 +3843,8 @@ function KYABA_TEST(){
     S={casts,slips,att:att||{},costs:costs||{},ui:{},
        bonus:defaultBonus(), round:defaultRound(), master:defaultMaster(),
        locks:{}, lockLog:[],    // ★v10.7：何も締まっていない状態から始める
-       wages:{}};               // ★v10.8：時給は空＝全員が基本時給1,500円（27章で入れる）
+       wages:{},                // ★v10.8：時給は空＝全員が基本時給1,500円（27章で入れる）
+       deduct:defaultDeduct()}; // ★v11：送迎費の基本額（500円）
     syncMaster();
   };
   /* ★v10.4：オリシャンの原価はHTMLから抜いた（このファイルをネットに置くため → 14章）。
@@ -3674,12 +4075,45 @@ function KYABA_TEST(){
     eq("勤務時間5.0（30分切り捨て後）", sh.indexOf(">5<")>=0, true);
     eq("Dはドリンク5杯＋テキーラ3杯×2＝11", sh.indexOf(">11<")>=0, true);
     eq("日当11,300が載る", sh.indexOf(">11,300<")>=0, true);
-    eq("個人売上23,500が載る", sh.indexOf(">23,500<")>=0, true);
+    /* ★v11d（2026-08-28 担当者さん指示「個人売上も×1.1で出して」）。
+       23,500（税抜）× 1.1 ＝ 25,850。 */
+    eq("★個人売上は税込25,850で載る", sh.indexOf(">25,850<")>=0, true);
+    eq("★税抜の23,500は紙に出ない", sh.indexOf(">23,500<")>=0, false);
+    /* ★★お会計の taxUp（100円単位で切り上げ）を使っていない証拠。
+       taxUp(23500) は 25,900 になる。ここが25,900だったら掛け先を間違えている。 */
+    eq("★お会計の100円切り上げ（25,900）にはなっていない", sh.indexOf(">25,900<")>=0, false);
+    eq("★salesTaxed は素直な×1.1の四捨五入", [salesTaxed(23500), taxUp(23500)], [25850, 25900]);
+    eq("★端数は四捨五入（1,005円 → 1,106円）", salesTaxed(1005), 1106);
     eq("単価行に時給1,500と誘客500とD300が出る",
        [sh.indexOf(">1,500<")>=0, sh.indexOf(">500<")>=0, sh.indexOf(">300<")>=0], [true,true,true]);
     eq("keepの単価は率のまま0.2で出す", sh.indexOf(">0.2<")>=0, true);
     eq("補助は出勤した日に1", sh.indexOf(">1<")>=0, true);
-    eq("対比＝日当÷個人売上（11,300÷23,500＝48％）", sh.indexOf("対比　48％")>=0, true);
+    /* ★v11d：分母が税込になったので率は下がる（11,300 ÷ 25,850 ＝ 43.7％ → 44％）。
+       ★担当者さん判断「税込で揃える」（2026-08-28）。 */
+    eq("★対比＝日当÷個人売上（税込）（11,300÷25,850＝44％）", sh.indexOf("対比　44％")>=0, true);
+    eq("★税抜のときの48％にはならない", sh.indexOf("対比　48％")>=0, false);
+    eq("★紙に「税込」と断ってある", sh.indexOf("個人売上・対比は税込")>=0, true);
+
+    /* ★★v11d：カード払いの伝票も一律×1.1（2026-08-28 担当者さん判断）。
+       お会計はカードだと ×1.1 を2回かける（cash → card。上乗せは手数料相当）。
+       個人売上はそこを数えない。**店の総売上（暫定B）と同じ考え方**。
+       ★ここが×1.21になっていたら、掛ける相手を accounting の card にしてしまっている。 */
+    {
+      const cardSlip = Object.assign(newSlip("2026-07-30"),
+        {no:"9", guests:1, kakari:"ママ", pay:"card",
+         sets:[{kind:"60分キープ",qty:1}]});      // 3,500円（税抜）
+      T(["ママ"],[cardSlip],{"2026-07-30":{"ママ":{in:"20:00",out:"01:00"}}});
+      const a = aggregate("2026-07-30","2026-07-30").casts["ママ"];
+      eq("カード伝票でも個人売上（税抜）はそのまま", a.sales, 3500);
+      eq("★★カード伝票でも税込は×1.1（×1.21ではない）", salesTaxed(a.sales), 3850);
+      // 同じ伝票のお会計は、カードなので2段の税込になる（こちらは別の数字で正しい）
+      eq("お会計のほうはカードの上乗せが乗る", accounting(cardSlip).total, taxUp(taxUp(3500)));
+    }
+    /* ★v11d：日ごとに丸めて合計する（表の縦計が必ず合うようにするため）。
+       2日とも1,005円なら 1,106 × 2 ＝ 2,212。
+       期間まとめて×1.1すると 2,010×1.1＝2,211 で1円ちがう。**縦計が合うほうを取っている。** */
+    eq("★日ごとに丸めてから足している（縦計が合う）",
+       [salesTaxed(1005)*2, salesTaxed(1005*2)], [2212, 2211]);
 
     // 紙の実物（6月後期・Bさん）と同じ計算になるか
     eq("実物の検算：44.5h×1,500＝66,750", Math.round(44.5*RATE.hour), 66750);
@@ -3791,7 +4225,25 @@ function KYABA_TEST(){
     out.push("── 15. ⑤設定：単価マスタの編集（v9で追加） ──");
     T(["ママ"],[]);
     eq("初期の銘柄数は44件", BOTTLES.length, 44);
-    eq("初期のセットは2種類", SET_KINDS.map(k=>k.name), ["40分","60分キープ"]);
+    /* ★v11c（2026-08-28 担当者さん要望「セットのデフォを60分に」）。
+       ★順番が意味を持つ検査。先頭＝伝票に「＋セット」を足したとき最初に入る種類。 */
+    eq("初期のセットは2種類。★先頭は60分キープ", SET_KINDS.map(k=>k.name), ["60分キープ","40分"]);
+    eq("★伝票に足したとき最初に入るのは60分キープ", SET_KINDS[0].name, "60分キープ");
+    /* 既に使っている人（⑤設定にマスタが保存済み）にも効くか。上の初期値だけでは効かない */
+    {
+      const ms = deepCopy(DEFAULT_BOTTLES);
+      const oldOrder = migrate({casts:[],slips:[],att:{},costs:{},
+        master:{drinkPrice:1500, sets:[{name:"40分",price:3500},{name:"60分キープ",price:3500}],
+                others:deepCopy(DEFAULT_OTHERS), bottles:ms}});
+      eq("★古い並び（40分が先頭）は60分キープが先頭に直る",
+         oldOrder.master.sets.map(k=>k.name), ["60分キープ","40分"]);
+      eq("★並べ替えても種類も値段も消えない",
+         oldOrder.master.sets.map(k=>k.price), [3500,3500]);
+      /* ★2回目は動かさない。毎回動かすと、⑤設定で手で並べ替えても戻ってしまう */
+      oldOrder.master.sets = [{name:"40分",price:3500},{name:"60分キープ",price:3500}];
+      eq("★1度移行したあと手で並べ替えたら、もう戻さない",
+         migrate(oldOrder).master.sets.map(k=>k.name), ["40分","60分キープ"]);
+    }
     eq("キャストドリンクの初期単価", DRINK_PRICE, 1500);
     // ★2026-08-06：担当者さん「クライナー含めてショットは全てテキーラと同じように処理する」
     eq("ショットのバックはテキーラと同額（クライナーも600円）",
@@ -4543,6 +4995,166 @@ function KYABA_TEST(){
       T(["ママ"],[]);
     }
 
+    out.push("── 28. ★送迎費・その他控除・日払い（v11：2026-08-28 担当者さん指示） ──");
+    {
+      /* 担当者さんの式そのまま：
+           日当 ＝ 時給分＋バック＋ボーナス −（送迎＋その他控除）
+           差引 ＝ 日当 − 日払い（＝これから渡す額。★マイナスもありえる）
+         ★この章の要は「**丸めてから引いている**」ことの証明（下の「引く順番」）。
+           逆にすると、距離で額が変わった日に**渡す額が静かにズレる**。 */
+      const F="2026-08-01", To="2026-08-15";
+      // ママが 20:00→1:00（5時間ちょうど＝端数の出ない7,500円）
+      const A5 = d => ({[d]:{"ママ":{in:"20:00", out:"1:00"}}});
+      const setD = (d, o) => { Object.assign(S.att[d]["ママ"], o); };
+      const mama = (from,to) => aggregate(from||F, to||To).casts["ママ"];
+
+      out.push("  ・入れていないときは、いままでと1円も変わらない");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      {
+        const c = mama();
+        eq("稼ぎ（丸めたあと）", c.payGross, 7500);
+        eq("★送迎を入れていなければ日当は今まで通り", c.pay, 7500);
+        eq("★差引も日当と同じ", c.net, 7500);
+        eq("送迎・他控除・日払いは0", [c.soge, c.other, c.nippay], [0,0,0]);
+      }
+
+      out.push("  ・送迎（印を付けたぶんだけ引く）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {soge:true, sogeYen:500});
+      {
+        const c = mama();
+        eq("送迎 500円が入る", c.soge, 500);
+        eq("★日当は500円減る", c.pay, 7000);
+        eq("★稼ぎのほうは動かない", c.payGross, 7500);
+        eq("送迎の日数", c.sogeN, 1);
+      }
+      out.push("  ・★印が付いていなければ、額が残っていても引かない");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {soge:false, sogeYen:500});
+      eq("★チェックを外せば0円（額は残っていてよい）", mama().soge, 0);
+      eq("★日当も元のまま", mama().pay, 7500);
+
+      out.push("  ・★引く順番（丸めてから引く。ここがこの機能の要）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {soge:true, sogeYen:505});
+      {
+        const c = mama();
+        eq("稼ぎは10円単位に丸まっている", c.payGross % 10, 0);
+        eq("★日当は 7,500 − 505 ＝ 6,995", c.pay, 6995);
+        /* ★★これがこの章の心臓。
+           もし「引いてから丸めて」いたら 6,995 → 6,990 になり、10円単位になる。
+           日当が10円単位で**ない**ことが、丸めのあとに引いた証拠。 */
+        eq("★★日当が10円単位でない＝丸めたあとに引いている", c.pay % 10, 5);
+      }
+
+      out.push("  ・その他控除（理由つき）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {other:1200, otherNote:"制服クリーニング代"});
+      {
+        const c = mama();
+        eq("その他控除 1,200円", c.other, 1200);
+        eq("日当は1,200円減る", c.pay, 6300);
+        eq("★理由が控えられている", (c.otherNotes[0]||{}).note, "制服クリーニング代");
+        eq("★理由には日付と金額も付く",
+           [(c.otherNotes[0]||{}).date, (c.otherNotes[0]||{}).yen], ["2026-08-05",1200]);
+      }
+
+      out.push("  ・日払い（★日当には混ぜない。差引で引く）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {nippay:3000});
+      {
+        const c = mama();
+        eq("★日当は日払いの影響を受けない", c.pay, 7500);
+        eq("★差引＝日当−日払い", c.net, 4500);
+        eq("日払いの額", c.nippay, 3000);
+      }
+
+      out.push("  ・★マイナスの日（渡しすぎた日）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {soge:true, sogeYen:500, nippay:20000});
+      {
+        const c = mama();
+        eq("日当", c.pay, 7000);
+        eq("★差引はマイナスになる（0で止めない）", c.net, -13000);
+      }
+
+      out.push("  ・★マイナスの日は、月の合計で相殺される");
+      {
+        const att = {"2026-08-05":{"ママ":{in:"20:00", out:"1:00", nippay:20000}},
+                     "2026-08-06":{"ママ":{in:"20:00", out:"1:00"}},
+                     "2026-08-07":{"ママ":{in:"20:00", out:"1:00"}}};
+        T(["ママ"],[],att,{});
+        const c = mama();
+        eq("3日ぶんの日当", c.pay, 22500);
+        eq("★差引＝22,500−20,000", c.net, 2500);
+        // 日ごとに足しても同じになる（紙の縦計と同じ道）
+        let n=0; ["2026-08-05","2026-08-06","2026-08-07"].forEach(d=>{ n += mama(d,d).net; });
+        eq("★日ごとに足しても同じ", n, 2500);
+      }
+
+      out.push("  ・★出勤時間が空でも控除は生きる（時間を打つ前に入れても消えない）");
+      {
+        T(["ママ"],[],{"2026-08-05":{"ママ":{in:"", out:"", soge:true, sogeYen:500, nippay:2000}}},{});
+        const c = mama();
+        eq("稼ぎは0（働いていないので）", c.payGross, 0);
+        eq("★送迎はちゃんと拾う", c.soge, 500);
+        eq("★日当はマイナス", c.pay, -500);
+        eq("★差引もマイナス", c.net, -2500);
+      }
+
+      out.push("  ・紙の明細（列と自己検査）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {soge:true, sogeYen:500, other:1200, otherNote:"制服代", nippay:3000});
+      {
+        const sh = sheetHTML("ママ", F, To);
+        eq("★紙の縦計に警告が出ない", sh.indexOf('class="msg ng"')<0, true);
+        eq("送迎の列がある",   sh.indexOf(">送迎<")>=0, true);
+        eq("他控除の列がある", sh.indexOf(">他控除<")>=0, true);
+        eq("日払いの列がある", sh.indexOf(">日払い<")>=0, true);
+        eq("差引の列がある",   sh.indexOf(">差引<")>=0, true);
+        eq("★理由が紙に出る", sh.indexOf("制服代")>=0, true);
+      }
+      out.push("  ・★控除が無い期間には、控除の説明を出さない（使わない欄で迷わせない）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      {
+        const sh = sheetHTML("ママ", F, To);
+        eq("★控除の断り書きは出ない", sh.indexOf("これから渡す額")<0, true);
+      }
+
+      out.push("  ・締めの控え（★渡した額も残す）");
+      T(["ママ"],[],A5("2026-08-05"),{});
+      setD("2026-08-05", {soge:true, sogeYen:500, nippay:3000});
+      {
+        const L = buildLock(F, To);
+        eq("★控えに日当が残る",   L.pay["ママ"], 7000);
+        eq("★控えに渡した額も残る", L.net["ママ"], 4000);
+        eq("日当の合計",   L.total, 7000);
+        eq("★渡した額の合計", L.netTotal, 4000);
+      }
+
+      out.push("  ・★古いデータを開いたとき（migrate）");
+      {
+        const o = migrate(Object.assign(blank(), {att:{"2026-08-05":{"ママ":{in:"20:00",out:"1:00"}}}}));
+        eq("★送迎費の基本額が入る", o.deduct.sogeBase, 500);
+        eq("★出勤の行には何も足さない（＝金額が変わらない）",
+           Object.keys(o.att["2026-08-05"]["ママ"]).sort().join(","), "in,out");
+        const o2 = migrate(Object.assign(blank(), {deduct:{sogeBase:800}}));
+        eq("★もう入っている基本額は書き換えない", o2.deduct.sogeBase, 800);
+      }
+
+      out.push("  ・基本額の読み口（sogeBase）");
+      {
+        T(["ママ"],[],{},{});
+        eq("初期は500円", sogeBase(), 500);
+        S.deduct.sogeBase = 800;  eq("変えられる", sogeBase(), 800);
+        S.deduct.sogeBase = -5;   eq("★マイナスは500に戻す", sogeBase(), 500);
+        S.deduct = null;          eq("★設定ごと無くても500", sogeBase(), 500);
+      }
+
+      // 使った状態を片付ける（次の章に持ち越さない）
+      T(["ママ"],[]);
+    }
+
   }catch(e){
     ng++; out.push("！ FAIL 例外: "+e.message+"\n"+e.stack);
   }finally{
@@ -4717,10 +5329,16 @@ function renderCalDetail(){
      ここで hour+back を自分で足し直さないこと──日当は「その日ごとに丸めて」払うので、
      丸めた後の pay と、内訳を足した額は一致しないことがある（それで正しい）。 */
   const R = aggregate(d, d);
+  /* ★v11：控除だけ入っている人も出す。
+     `c.pay>0` だけで絞ると、**控除で日当が0以下になった人が一覧から消える**
+     （消えたのに人件費の合計には入っている、という食い違いが起きる）。 */
   const rows = Object.keys(R.casts).map(k=>R.casts[k])
-                 .filter(c=> c.pay>0 || c.min>0)
+                 .filter(c=> c.pay!==0 || c.min>0 || c.soge || c.other || c.nippay)
                  .sort((a,b)=> b.pay-a.pay);
   const jinken = rows.reduce((t,c)=> t+c.pay, 0);
+  // ★v11：この日に控除があるか（あるときだけ列を足す。無い日に空の列を並べない）
+  const hasDed = rows.some(c=> c.soge || c.other || c.nippay);
+  const netAll = rows.reduce((t,c)=> t+c.net, 0);
   const L = lockOfDate(d);
 
   let h = '<div class="card">';
@@ -4759,21 +5377,46 @@ function renderCalDetail(){
     h += '<div class="muted">この日の出勤・バックはまだありません。'
        + '（時給分は②出勤時間タブに出勤・退勤を入れると出ます）</div>';
   }else{
+    const amt = v => v<0 ? '<span class="minus">−'+yen(-v)+'</span>' : yen(v);
     h += '<table><thead><tr><th style="text-align:left">キャスト</th><th class="amt">時給分</th>'
-       + '<th class="amt">バック</th><th class="amt">ボーナス</th><th class="amt">日当</th></tr></thead><tbody>';
+       + '<th class="amt">バック</th><th class="amt">ボーナス</th>'
+       + (hasDed ? '<th class="amt">送迎</th><th class="amt">他控除</th>' : '')
+       + '<th class="amt">日当</th>'
+       + (hasDed ? '<th class="amt">日払い</th><th class="amt">差引</th>' : '')
+       + '</tr></thead><tbody>';
     rows.forEach(c=>{
       h += '<tr><td>'+esc(c.name)+'</td>'
          + '<td class="amt">'+yen(c.hour)+'</td>'
          + '<td class="amt">'+yen(c.back)+'</td>'
          + '<td class="amt">'+(c.bonus?yen(c.bonus):'<span class="muted">—</span>')+'</td>'
-         + '<td class="amt"><b>'+yen(c.pay)+'</b></td></tr>';
+         + (hasDed
+             ? '<td class="amt">'+(c.soge ?'−'+yen(c.soge) :'<span class="muted">—</span>')+'</td>'
+              +'<td class="amt">'+(c.other?'−'+yen(c.other):'<span class="muted">—</span>')+'</td>'
+             : '')
+         + '<td class="amt"><b>'+amt(c.pay)+'</b></td>'
+         + (hasDed
+             ? '<td class="amt">'+(c.nippay?'−'+yen(c.nippay):'<span class="muted">—</span>')+'</td>'
+              +'<td class="amt"><b>'+amt(c.net)+'</b></td>'
+             : '')
+         + '</tr>';
     });
     h += '<tr><td><b>合計</b></td><td class="amt"></td><td class="amt"></td><td class="amt"></td>'
-       + '<td class="amt"><b>'+yen(jinken)+'</b></td></tr>';
+       + (hasDed ? '<td class="amt"></td><td class="amt"></td>' : '')
+       + '<td class="amt"><b>'+amt(jinken)+'</b></td>'
+       + (hasDed ? '<td class="amt"></td><td class="amt"><b>'+amt(netAll)+'</b></td>' : '')
+       + '</tr>';
     h += '</tbody></table>';
     h += '<div class="muted" style="font-size:11px;margin-top:6px">'
-       + '※日当は'+yen(roundUnit())+'円未満を'+roundModeLabel()+'ています（その日ごと）。'
-       + '内訳を足した額と1円単位で違うことがありますが、実際に払うのは「日当」の額です。</div>';
+       + '※'+(hasDed?'稼ぎ（送迎・控除を引く前）は':'日当は')
+       + yen(roundUnit())+'円未満を'+roundModeLabel()+'ています（その日ごと）。'
+       + '内訳を足した額と1円単位で違うことがありますが、実際に払うのは「日当」の額です。'
+       /* ★v11：控除がある日だけ、式をそのまま添える */
+       + (hasDed
+           ? '<br>※<b>日当</b>＝時給分＋バック＋ボーナス −（送迎＋他控除）。'
+             +'<b>差引</b>＝日当 − 日払い（これから渡す額）。'
+             +'送迎・他控除・日払いは<b>②出勤時間</b>で入れます。'
+           : '')
+       + '</div>';
   }
   h += '</div></div>';
 
