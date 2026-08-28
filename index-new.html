@@ -26,6 +26,19 @@ nav button{flex:0 0 auto;background:none;border:none;color:#b8c1cc;padding:11px 
 nav button.on{color:#fff;border-bottom-color:#5b9bff;background:#333d4b}
 main{max-width:1180px;margin:0 auto;padding:16px}
 section{display:none} section.on{display:block}
+/* ★v11c（2026-08-28 担当者さん要望「伝票みたいな比率にしたい」）：
+   ①伝票を打つ画面だけ横を詰めて、紙のお会計票と同じ縦長の比率にする。
+   ★①だけ。④締め・給与の表と⑦カレンダーは列が多いので広いまま
+     （ここを一緒に狭めると横スクロールが出る）。 */
+#s-slip{max-width:640px;margin-left:auto;margin-right:auto}
+/* ★v11c：①を640pxに詰めたぶん、**ボトルの銘柄だけ**入りきらない。
+   45銘柄のうち30銘柄が切れて、「シーバスリーガル ミズナラ」と「シーバスリーガル 18年」が
+   どちらも『シーバスリーガル…』になり、打つ人が見分けられなくなる（実測で確認）。
+   → 銘柄だけ行をまるごと使う。売値・本数・金額はその下の段に並べる。
+   ★これはスマホ（820px以下）でやっているのと同じ形。
+   ★切れるのはボトルだけ。セット・キャスト・その他の品名は640pxでも全部入る。 */
+#s-slip .gl-bot{grid-template-columns:110px 70px 1fr 44px}
+#s-slip .gl-bot>div:first-child{grid-column:1/-1}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 .card>h2{margin:0 0 10px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .card>h2 .ttl{white-space:nowrap}
@@ -669,7 +682,9 @@ const TEQUILA_AS_DRINKS = RATE.tequila / RATE.drink;   // ＝ 2
    （伝票入力・集計・出勤表・原価タブなど35箇所）は一切変更せずに済む。
    ========================================================================= */
 const DEFAULT_DRINK_PRICE = 1500;      // キャストドリンク
-const DEFAULT_SET_KINDS = [{name:"40分",price:3500},{name:"60分キープ",price:3500}];
+/* ★v11c（2026-08-28 担当者さん要望「セットのデフォを60分に」）：先頭＝伝票に足したとき
+   最初に入る種類。実際に多いほうを先頭に置く。★40分も消していない。 */
+const DEFAULT_SET_KINDS = [{name:"60分キープ",price:3500},{name:"40分",price:3500}];
 
 const DEFAULT_OTHERS = [
   // castPrice: キャスト欄に名前を入れたときの単価（紙のカッコ書きに相当）
@@ -1458,6 +1473,17 @@ function migrate(o){
   const m = o.master;
   if(m.drinkPrice==null)      m.drinkPrice = DEFAULT_DRINK_PRICE;
   if(!Array.isArray(m.sets)   || !m.sets.length)    m.sets    = deepCopy(DEFAULT_SET_KINDS);
+  /* ★v11c（2026-08-28 担当者さん要望「セットのデフォを60分に」）：
+     もう使っている人の⑤設定にはマスタが保存済みなので、上の初期値を入れ替えただけでは効かない。
+     ここで並べ替える。★消さない・値段も触らない。**順番だけ**。
+     伝票は品名（kind）で単価を引いているので、並べ替えても計算は1円も動かない。
+     ★1回だけ走らせる。毎回走らせると、担当者さんが⑤設定で手で並べ替えても戻ってしまう。 */
+  if(!o.mig || typeof o.mig!=="object") o.mig = {};
+  if(!o.mig.setOrder60){
+    o.mig.setOrder60 = 1;
+    const i60 = m.sets.findIndex(x=>x && x.name==="60分キープ");
+    if(i60 > 0) m.sets.unshift(m.sets.splice(i60,1)[0]);
+  }
   if(!Array.isArray(m.others) || !m.others.length)  m.others  = deepCopy(DEFAULT_OTHERS);
   if(!Array.isArray(m.bottles)|| !m.bottles.length) m.bottles = deepCopy(DEFAULT_BOTTLES);
   /* ★v10：ショットのバックが「未確認」のまま残っているデータを補う（2026-08-06）
@@ -4111,7 +4137,25 @@ function KYABA_TEST(){
     out.push("── 15. ⑤設定：単価マスタの編集（v9で追加） ──");
     T(["ママ"],[]);
     eq("初期の銘柄数は44件", BOTTLES.length, 44);
-    eq("初期のセットは2種類", SET_KINDS.map(k=>k.name), ["40分","60分キープ"]);
+    /* ★v11c（2026-08-28 担当者さん要望「セットのデフォを60分に」）。
+       ★順番が意味を持つ検査。先頭＝伝票に「＋セット」を足したとき最初に入る種類。 */
+    eq("初期のセットは2種類。★先頭は60分キープ", SET_KINDS.map(k=>k.name), ["60分キープ","40分"]);
+    eq("★伝票に足したとき最初に入るのは60分キープ", SET_KINDS[0].name, "60分キープ");
+    /* 既に使っている人（⑤設定にマスタが保存済み）にも効くか。上の初期値だけでは効かない */
+    {
+      const ms = deepCopy(DEFAULT_BOTTLES);
+      const oldOrder = migrate({casts:[],slips:[],att:{},costs:{},
+        master:{drinkPrice:1500, sets:[{name:"40分",price:3500},{name:"60分キープ",price:3500}],
+                others:deepCopy(DEFAULT_OTHERS), bottles:ms}});
+      eq("★古い並び（40分が先頭）は60分キープが先頭に直る",
+         oldOrder.master.sets.map(k=>k.name), ["60分キープ","40分"]);
+      eq("★並べ替えても種類も値段も消えない",
+         oldOrder.master.sets.map(k=>k.price), [3500,3500]);
+      /* ★2回目は動かさない。毎回動かすと、⑤設定で手で並べ替えても戻ってしまう */
+      oldOrder.master.sets = [{name:"40分",price:3500},{name:"60分キープ",price:3500}];
+      eq("★1度移行したあと手で並べ替えたら、もう戻さない",
+         migrate(oldOrder).master.sets.map(k=>k.name), ["40分","60分キープ"]);
+    }
     eq("キャストドリンクの初期単価", DRINK_PRICE, 1500);
     // ★2026-08-06：担当者さん「クライナー含めてショットは全てテキーラと同じように処理する」
     eq("ショットのバックはテキーラと同額（クライナーも600円）",
