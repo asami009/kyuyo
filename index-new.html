@@ -1576,6 +1576,12 @@ function saveMaster(){ save(); syncMaster(); renderAll(); }
 function newSlip(date){
   return {id:uid(), date:date||todayStr(), no:"", guests:1, kakari:"",
     annai:"", annaiOther:"",
+    /* ★v11c：案内所の伝票は「1セット目のセット料金」にTAXをかけない（2026-08-31 担当者さん指示）。
+       taxOn ＝ この伝票にTAXをかけるか。**新しく作る伝票だけ false**（＝案内所ならTAXなし）。
+       すでに打ってある伝票はこの項目を持っていない（undefined）＝ いままで通り全部に課税。
+       → 締めて渡したあとの給料・お会計が後から動かない（priceAt / costAt と同じ考え方）。
+       ★係が案内所でないときは taxOn が false でも関係ない（annaiExempt が 0 を返す）。 */
+    taxOn:false,
     dohan:false, dohanCast:"", pay:"cash",
     sets:[], bottles:[], drinks:[], others:[], adjusts:[]};
 }
@@ -1636,16 +1642,48 @@ function subtotal(sp){
   sp.adjusts.forEach(l=>t+=Math.round(+l.amount||0));
   return Math.round(t);
 }
+/* ★v11c：案内所のときの「TAXがかからないぶん」（2026-08-31 担当者さん指示）
+   -------------------------------------------------------------------------
+   案内所から回ってきたお客様は、**最初の1セットぶんのセット料金にTAXをかけない**。
+   延長（2セット目から）は普通にTAXがのる。
+   何本ぶん非課税になるかは **来店人数（guests）**。3名のグループなら 3,500×3 が非課税。
+
+   ★金額ではなく「上から本数で」取っている。
+     セットの単価は⑤設定で変えられるので、「3,500円の行を探す」書き方にすると
+     単価を変えた日に静かに壊れる。
+
+   ★0 を返す＝いままで通り全部に課税、になるのは次の3つ。
+     ・係が案内所ではない
+     ・すでに打ってある伝票（taxOn を持っていない ＝ undefined）
+     ・画面で「この伝票はTAXをかける」にチェックを入れた（taxOn === true） */
+function annaiExempt(sp){
+  if(!sp || sp.kakari!==ANNAI) return 0;
+  if(sp.taxOn !== false) return 0;
+  let left = Math.max(0, Math.round(+sp.guests||0));
+  let ex   = 0;
+  (sp.sets||[]).forEach(l=>{
+    if(left<=0) return;
+    const n = Math.min(left, Math.max(0, Math.round(+l.qty||0)));
+    ex   += setUnit(l)*n;
+    left -= n;
+  });
+  return Math.round(ex);
+}
 function accounting(sp){
   const sub  = subtotal(sp);
-  const cash = taxUp(sub);
+  /* ★v11c：非課税ぶんはTAXの計算から外し、あとから素通しで足す。
+     カードの上乗せ（もう一度の ×1.1）は非課税ぶんにも**かかる**。
+     カード手数料はTAXとは別の話、というのが 2026-08-31 の担当者さんの整理。
+     だから card は今まで通り cash を丸ごと taxUp している。 */
+  const ex   = annaiExempt(sp);
+  const cash = taxUp(sub - ex) + ex;
   const card = taxUp(cash);
   /* ★v10.2：調整（値引き・ご祝儀）の合計を別に出す（2026-08-10 担当者さん要望）
      調整は sub の中に溶け込んでいるため、会計欄を見ても「値引きが入っているか」が分からなかった。
      打った本人ですら、あとから見て確かめられない。会計に内訳として出す。
      adjBase ＝ 調整を入れる前の明細合計（sub − adj）。表示にだけ使い、計算には使わない */
   const adj  = (sp.adjusts||[]).reduce((t,l)=>t+Math.round(+l.amount||0), 0);
-  return {sub, cash, card, adj, adjBase: sub-adj, total: sp.pay==="card" ? card : cash};
+  return {sub, cash, card, adj, adjBase: sub-adj, exempt: ex, total: sp.pay==="card" ? card : cash};
 }
 /* 原価。⑤設定で固定原価を入れた銘柄はその値、それ以外は入力された値（未入力は null）
    ★v10.4：初期状態では固定原価を持つ銘柄は1件も無い（HTMLに原価を書かないため → 14章）。
@@ -2195,6 +2233,14 @@ function renderSlipEditor(){
         +(sp.annai==="他店"
            ? '<div><label>他店の名前</label><input data-p="annaiOther" value="'+esc(sp.annaiOther)+'" placeholder="店名を入れてください"></div>'
            : "")
+        /* ★v11c：案内所のときだけ出す（2026-08-31 担当者さん指示）。
+           ふだんは外したまま＝1セット目のセット料金にTAXがかからない。
+           「念のため、案内所でもTAXをかけられるように」ということでチェックを付けた。
+           ★すでに打ってある伝票は taxOn を持っていない（undefined）ので、
+             ここは**チェックが入った状態**で開く＝いままで通りの金額のまま。 */
+        +'<div class="narrow"><label>TAX</label><div style="padding:6px 0">'
+        +'<input type="checkbox" data-p="taxOn"'+(sp.taxOn!==false?" checked":"")+'>'
+        +' <span class="muted">かける</span></div></div>'
       : "")
    /* ★v11b：同伴と支払いはここから外した（2026-08-28 担当者さん指示）。
       紙のお会計票では **同伴は明細に書かれ、支払いは一番下（お客様名のところ）**。
@@ -2237,7 +2283,12 @@ function renderSlipEditor(){
        +'<div class="total-line"><span class="lbl">調整'+adjNote+'</span><span>'+(a.adj>0?"＋":"")+yen(a.adj)+' 円</span></div>'
       : "")
    +'<div class="total-line"><span class="lbl">明細合計（税抜）</span><span>'+yen(a.sub)+' 円</span></div>'
-   +'<div class="total-line"><span class="lbl">現金（明細合計 ×1.1 → 100円切上）</span><span>'+yen(a.cash)+' 円</span></div>'
+   /* ★v11c：案内所でTAXを外したぶんは、金額を見ただけでは分からないので内訳として出す。
+      値引き（調整）を会計に出しているのと同じ理由。 */
+   +(a.exempt>0
+      ? '<div class="total-line"><span class="lbl">うちTAXなし（案内所・セット'+esc(Math.max(0,Math.round(+sp.guests||0)))+'本ぶん）</span><span>'+yen(a.exempt)+' 円</span></div>'
+      : "")
+   +'<div class="total-line"><span class="lbl">現金（'+(a.exempt>0?'TAXなしのぶんを除いて ×1.1 → 100円切上 ＋ TAXなしぶん':'明細合計 ×1.1 → 100円切上')+'）</span><span>'+yen(a.cash)+' 円</span></div>'
    +'<div class="total-line"><span class="lbl">カード（現金額 ×1.1 → 100円切上）</span><span>'+yen(a.card)+' 円</span></div>'
    /* ★v11b：支払いはここ（2026-08-28 担当者さん指示「紙の伝票のお客様名のところに配置して」）。
       紙では一番下が「◯◯様 → 税込合計金額」の並び。その場所に置いた。
@@ -4183,6 +4234,55 @@ function KYABA_TEST(){
     T(["ママ"],[Object.assign(newSlip("2026-08-02"),{guests:1,kakari:ANNAI,annai:"他店",annaiOther:""})]);
     eq("他店で店名が空なら警告", aggregate().warn.some(w=>w.indexOf("店名が入っていません")>=0), true);
     eq("選べる案内所は4つ", ANNAI_PLACES, ["流川","バナナビ","中新地","他店"]);
+
+    out.push("");
+    out.push("── 13-B2. 案内所は1セット目のセット料金にTAXがかからない（2026-08-31 担当者さん指示） ──");
+    const mkA = o => Object.assign(newSlip("2026-08-02"),
+      Object.assign({guests:1, kakari:ANNAI, annai:"流川", sets:[{kind:"40分",qty:1}]}, o));
+
+    const tx1 = mkA({});
+    eq("1名・1セット → 3,500が非課税", annaiExempt(tx1), 3500);
+    eq("1名・1セット → 現金も3,500（×1.1しない）", accounting(tx1).cash, 3500);
+
+    const tx2 = mkA({sets:[{kind:"40分",qty:2}]});
+    eq("延長ぶんにはTAXがのる（非課税は1本だけ）", annaiExempt(tx2), 3500);
+    eq("1名・2セット → 3,900＋3,500", accounting(tx2).cash, 7400);
+    eq("カードの上乗せは非課税ぶんにもかかる", accounting(tx2).card, taxUp(7400));
+
+    const tx3 = mkA({guests:3, sets:[{kind:"40分",qty:3}]});
+    eq("3名グループ → 3本ぶん全部が非課税", [annaiExempt(tx3), accounting(tx3).cash], [10500, 10500]);
+    const tx4 = mkA({guests:3, sets:[{kind:"40分",qty:4}]});
+    eq("3名で4セット → 4本目だけ課税", [annaiExempt(tx4), accounting(tx4).cash], [10500, taxUp(3500)+10500]);
+
+    const tx5 = mkA({drinks:[{cast:"Aさん",qty:2}]});
+    eq("セット以外（ドリンク）にはTAXがのる", accounting(tx5).cash, taxUp(3000)+3500);
+
+    const tx6 = mkA({sets:[{kind:"40分",qty:2}], taxOn:true});
+    eq("「TAXをかける」にチェック → いままで通り全部に課税",
+       [annaiExempt(tx6), accounting(tx6).cash], [0, taxUp(7000)]);
+
+    /* ★いちばん大事なテスト。
+       前に打った伝票は taxOn という項目を持っていない。ここが 0 でなくなると、
+       締めて渡したあとの給料とお会計が後から動く（原価の焼き付けと同じ事故）。 */
+    const tx7 = mkA({sets:[{kind:"40分",qty:2}]});
+    delete tx7.taxOn;
+    eq("★前に打った伝票は1円も動かない", [annaiExempt(tx7), accounting(tx7).cash], [0, taxUp(7000)]);
+
+    const tx8 = mkA({guests:3, kakari:"ママ", sets:[{kind:"40分",qty:3}]});
+    eq("係がキャストなら非課税にならない", [annaiExempt(tx8), accounting(tx8).cash], [0, taxUp(10500)]);
+    eq("フリーも非課税にならない", annaiExempt(mkA({kakari:""})), 0);
+
+    eq("人数0なら非課税なし", annaiExempt(mkA({guests:0})), 0);
+    eq("セットが無ければ0", annaiExempt(mkA({guests:2, sets:[]})), 0);
+    eq("セットより人数が多くても、有るぶんだけ", annaiExempt(mkA({guests:5, sets:[{kind:"40分",qty:2}]})), 7000);
+
+    /* 単価は⑤設定で変えられる。金額（3,500）を探す作りにすると単価を変えた日に壊れる */
+    eq("単価が変わっても「本数」で取れている",
+       annaiExempt(mkA({sets:[{kind:"40分",qty:1,priceAt:5000}]})), 5000);
+    eq("種類が混ざっても上から順に取る",
+       annaiExempt(mkA({guests:2, sets:[{kind:"40分",qty:1,priceAt:5000},{kind:"60分キープ",qty:2,priceAt:3500}]})), 8500);
+
+    eq("非課税が無いときは会計の内訳に出さない（exempt=0）", accounting(mkA({kakari:"ママ"})).exempt, 0);
     // 紙はDが1列だけ（ドリンクとテキーラをまとめる）。見出し行は上下2回出るので2件が正
     eq("D列は1つだけ（テキーラの独立列は無い）",
        [(sh.match(/>D<\/th>/g)||[]).length, sh.indexOf(">テキーラ</th>")>=0], [2,false]);
