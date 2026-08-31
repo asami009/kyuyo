@@ -4298,6 +4298,10 @@ function KYABA_TEST(){
     eq("version.txt が空なら何もしない", shouldReload("","aaa11111",null), false);
     eq("version.txt が取れなかった（null）なら何もしない", shouldReload(null,"aaa11111",null), false);
     eq("ビルドを通していないファイルでは何もしない", shouldReload("bbb22222","__BUILD"+"_VER__",null), false);
+    /* 飛び先は「版番号つきのURL」。ただのreloadだと古いキャッシュがまた出てくるため */
+    eq("飛び先に ?v=版番号 が付く", verUrl("https://x.test/kyuyo/","bbb22222"), "https://x.test/kyuyo/?v=bbb22222");
+    eq("前の ?v= は消えて二重にならない", verUrl("https://x.test/kyuyo/?v=aaa11111","bbb22222"), "https://x.test/kyuyo/?v=bbb22222");
+    eq("#以降も消える", verUrl("https://x.test/kyuyo/?v=a#top","ccc33333"), "https://x.test/kyuyo/?v=ccc33333");
 
     out.push("── 13-D. 数字欄（カーソルが先頭に戻る不具合の対策） ──");
     eq("数字欄は type=number を使っていない",
@@ -5831,7 +5835,7 @@ renderAll();
 
    ★オフライン・圏外・version.txt が無い場合は、何もせず普通に使える（catch）。
    ★ファイルを直接開いたとき（file://）も何もしない。 */
-const APP_VER  = "865f6a25";
+const APP_VER  = "6eb881d2";
 const VER_FILE = "version.txt";
 const VER_FLAG = "kyuyoReloadedFor";
 
@@ -5842,6 +5846,15 @@ function shouldReload(latest, current, flag){
   if(current === "__BUILD"+"_VER__") return false; // ビルドを通していない開発中のファイル
   if(flag === latest)     return false;          // ★この版のために既に1回読み込み直している
   return true;
+}
+/* 飛び先のURL。location.reload() ではなく **版番号つきのURLへ飛ぶ**。
+   ただの reload だと、ブラウザがまた同じ古いHTMLをキャッシュから出してくることがある
+   （※Cmd+R では起きにくいが、リンクやブックマークから開いたときに起きる）。
+   URLが変われば「知らないページ」なので必ず取りに行く。
+   ＝ いままで手で ?v=2 を付けて配っていたのを、道具が自分でやる。 */
+function verUrl(href, ver){
+  const u = href.split("#")[0].split("?")[0];
+  return u + "?v=" + ver;
 }
 function verBar(){
   if(document.getElementById("verBar")) return;
@@ -5865,7 +5878,7 @@ function verBar(){
       if(latest === APP_VER){ try{ sessionStorage.removeItem(VER_FLAG); }catch(e){} return; }
       if(shouldReload(latest, APP_VER, flag)){
         try{ sessionStorage.setItem(VER_FLAG, latest); }catch(e){}
-        location.reload();
+        location.replace(verUrl(location.href, latest));
       }else{
         verBar();     // 1回読み込み直しても合わなかった＝配られるHTMLがまだ古い
       }
