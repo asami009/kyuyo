@@ -4287,6 +4287,18 @@ function KYABA_TEST(){
     eq("D列は1つだけ（テキーラの独立列は無い）",
        [(sh.match(/>D<\/th>/g)||[]).length, sh.indexOf(">テキーラ</th>")>=0], [2,false]);
 
+    out.push("");
+    out.push("── 13-B3. 新しい版への入れ替え（★無限リロードを起こさないこと） ──");
+    eq("同じ版なら読み込み直さない", shouldReload("aaa11111","aaa11111",null), false);
+    eq("新しい版が出ていたら読み込み直す", shouldReload("bbb22222","aaa11111",null), true);
+    /* ★ここが命綱。置いてあるファイルは新しいのに、配られるHTMLが古いままの数分がある。
+       1回読み込み直しても同じなら、もう読み込み直さない（帯を出すだけ）。 */
+    eq("★1回読み込み直したら、同じ版では二度とやらない", shouldReload("bbb22222","aaa11111","bbb22222"), false);
+    eq("さらに新しい版が出たら、また1回だけやる", shouldReload("ccc33333","aaa11111","bbb22222"), true);
+    eq("version.txt が空なら何もしない", shouldReload("","aaa11111",null), false);
+    eq("version.txt が取れなかった（null）なら何もしない", shouldReload(null,"aaa11111",null), false);
+    eq("ビルドを通していないファイルでは何もしない", shouldReload("bbb22222","__BUILD"+"_VER__",null), false);
+
     out.push("── 13-D. 数字欄（カーソルが先頭に戻る不具合の対策） ──");
     eq("数字欄は type=number を使っていない",
        document.querySelectorAll('#slipEditor input[type="number"]').length, 0);
@@ -5797,6 +5809,69 @@ document.getElementById("btnSample").onclick=()=>{
 
 wireMasterButtons();
 renderAll();
+
+/* =========================================================================
+   ★v11d 新しい版が出ていたら、勝手に入れ替わる（2026-08-31 担当者さん指示）
+   -------------------------------------------------------------------------
+   なぜ要るか
+     この道具はURLを渡して使ってもらう。直したあと、開く人のブラウザが
+     **前に見た版を10分ほど覚えている**ので、直したのに古いまま見えることがある。
+     いままでは URLの後ろに ?v=2 を足して渡してごまかしていたが、
+     **直すたびにURLを渡し直すのは運用として持たない**（2026-08-31 担当者さん）。
+
+   やっていること
+     開いた直後に version.txt（中身は8文字だけ）を1回だけ見に行く。
+     自分の版と違えば、1回だけページを読み込み直す。
+
+   ★無限リロードは絶対に起こさない
+     置いてあるファイルが新しいのに、配られるHTMLが古いままの数分があり得る。
+     そのとき素直に「違う→読み込み直す」を繰り返すと**道具が永久に開かなくなる**。
+     だから読み込み直すのは **1回だけ**（sessionStorage で覚える）。
+     それでも合わなければ、上に細い帯を出して知らせるだけにする。
+
+   ★オフライン・圏外・version.txt が無い場合は、何もせず普通に使える（catch）。
+   ★ファイルを直接開いたとき（file://）も何もしない。 */
+const APP_VER  = "865f6a25";
+const VER_FILE = "version.txt";
+const VER_FLAG = "kyuyoReloadedFor";
+
+/* 読み込み直すべきか。★fetchを含めないので、下の検算で確かめられる */
+function shouldReload(latest, current, flag){
+  if(!latest || !current) return false;          // どちらか分からないなら触らない
+  if(latest === current)  return false;          // 最新
+  if(current === "__BUILD"+"_VER__") return false; // ビルドを通していない開発中のファイル
+  if(flag === latest)     return false;          // ★この版のために既に1回読み込み直している
+  return true;
+}
+function verBar(){
+  if(document.getElementById("verBar")) return;
+  const d = document.createElement("div");
+  d.id = "verBar";
+  d.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:9999;background:#c0392b;"
+                  + "color:#fff;padding:8px 12px;font-size:13px;text-align:center";
+  d.textContent = "新しい版が出ています。このページをいちど閉じて、開き直してください。";
+  document.body.appendChild(d);
+}
+(function checkVersion(){
+  if(location.protocol === "file:") return;
+  if(APP_VER === "__BUILD"+"_VER__") return;   // ビルド前のファイルでは動かさない
+  fetch(VER_FILE + "?t=" + Date.now(), {cache:"no-store"})
+    .then(r => r.ok ? r.text() : null)
+    .then(t => {
+      if(t == null) return;
+      const latest = String(t).trim().slice(0,64);
+      let flag = null;
+      try{ flag = sessionStorage.getItem(VER_FLAG); }catch(e){}
+      if(latest === APP_VER){ try{ sessionStorage.removeItem(VER_FLAG); }catch(e){} return; }
+      if(shouldReload(latest, APP_VER, flag)){
+        try{ sessionStorage.setItem(VER_FLAG, latest); }catch(e){}
+        location.reload();
+      }else{
+        verBar();     // 1回読み込み直しても合わなかった＝配られるHTMLがまだ古い
+      }
+    })
+    .catch(()=>{});
+})();
 </script>
 </body>
 </html>
