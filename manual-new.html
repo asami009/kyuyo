@@ -741,6 +741,76 @@ document.getElementById("clear").onclick = ()=>{
 };
 renderCats();
 render();
+
+/* =========================================================================
+   ★版チェック（2026-09-01 担当者さん「取説も自動で新しくなるように」）
+   ★★道具本体（index.html）と**同じ仕組みのコピー**。直すときは両方直すこと。
+     単体HTMLなので共通のファイルに切り出せない。
+
+   なぜ要るか
+     取説もURLを渡して読んでもらう。直したあと、読む人のブラウザが
+     **前に見た版を10分ほど覚えている**ので、直したのに古いまま見えることがある。
+
+   ★★版番号は**取説自身の中身**から作る（道具のハッシュではない）。
+     道具のハッシュを使うと、**取説を直しても番号が変わらず気づかれない**し、
+     逆に道具だけ直したときに取説まで読み込み直させてしまう。
+     → ビルドが `manual-version.txt` に取説のハッシュを書く。
+
+   ★無限リロードは絶対に起こさない
+     置いてあるファイルが新しいのに、配られるHTMLが古いままの数分があり得る。
+     素直に繰り返すと**取説が永久に開かなくなる**。読み込み直すのは1回だけ。
+     それでも合わなければ細い帯を出すだけで、**読むことはできたまま**。
+   ★sessionStorage のキーは道具と別にする。同じにすると、道具で1回読み込み直した記録が
+     取説側の「もうやった」に化けて、取説が古いまま止まる。
+   ★オフライン・圏外・ファイルが無い場合は何もしない（catch）。file:// でも何もしない。
+   ========================================================================= */
+const APP_VER  = "55fda276";
+const VER_FILE = "manual-version-new.txt";
+const VER_FLAG = "kyuyoManualReloadedFor";   // ★道具は kyuyoReloadedFor。別にする
+
+/* 読み込み直すべきか。★fetchを含めないので、検査から直接ためせる */
+function shouldReload(latest, current, flag){
+  if(!latest || !current) return false;             // どちらか分からないなら触らない
+  if(latest === current)  return false;             // 最新
+  if(current === "__BUILD"+"_VER__") return false;  // ビルドを通していない開発中のファイル
+  if(flag === latest)     return false;             // ★この版のために既に1回読み込み直している
+  return true;
+}
+/* 飛び先。location.reload() ではなく**版番号つきURL**へ飛ぶ。
+   ただの reload だと、ブラウザがまた同じ古いHTMLをキャッシュから出してくることがある。 */
+function verUrl(href, ver){
+  const u = href.split("#")[0].split("?")[0];
+  return u + "?v=" + ver;
+}
+function verBar(){
+  if(document.getElementById("verBar")) return;
+  const d = document.createElement("div");
+  d.id = "verBar";
+  d.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:9999;background:#c0392b;"
+                  + "color:#fff;padding:8px 12px;font-size:13px;text-align:center";
+  d.textContent = "新しい説明書が出ています。このページをいちど閉じて、開き直してください。";
+  document.body.appendChild(d);
+}
+(function checkVersion(){
+  if(location.protocol === "file:") return;
+  if(APP_VER === "__BUILD"+"_VER__") return;   // ビルド前のファイルでは動かさない
+  fetch(VER_FILE + "?t=" + Date.now(), {cache:"no-store"})
+    .then(r => r.ok ? r.text() : null)
+    .then(t => {
+      if(t == null) return;
+      const latest = String(t).trim().slice(0,64);
+      let flag = null;
+      try{ flag = sessionStorage.getItem(VER_FLAG); }catch(e){}
+      if(latest === APP_VER){ try{ sessionStorage.removeItem(VER_FLAG); }catch(e){} return; }
+      if(shouldReload(latest, APP_VER, flag)){
+        try{ sessionStorage.setItem(VER_FLAG, latest); }catch(e){}
+        location.replace(verUrl(location.href, latest));
+      }else{
+        verBar();     // 1回読み込み直しても合わなかった＝配られるHTMLがまだ古い
+      }
+    })
+    .catch(()=>{});
+})();
 </script>
 </body>
 </html>
